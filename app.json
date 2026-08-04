@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Pennywise",
+    "slug": "pennywise",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "pennywise",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B7A5B"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pennywise.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B7A5B"
+      },
+      "package": "com.pennywise.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "backgroundColor": "#0B7A5B",
+          "imageWidth": 160
+        }
+      ]
+    ]
+  }
+}
