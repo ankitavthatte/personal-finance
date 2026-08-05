@@ -362,12 +362,22 @@
 
   function migrate(d){ d=d||{}; if(!d.transactions)d.transactions=[]; if(!d.categories||!d.categories.length)d.categories=copyCats();
     if(!d.accounts||!d.accounts.length)d.accounts=defaultAccounts(false); if(!d.recurring)d.recurring=[]; if(!d.goals)d.goals=[];
-    if(!d.members)d.members={}; if(!d.household)d.household={name:'Our Household'};
+    if(!d.members)d.members={}; if(!d.household)d.household={name:'Our Household'}; if(!d.settlements)d.settlements=[];
     if(!d.settings)d.settings={sym:'₹',cur:'INR',monthlyBudget:45000,name:'there',theme:'system',lock:false,pin:''};
     if(d.settings.lock===undefined)d.settings.lock=false; if(d.settings.pin===undefined)d.settings.pin='';
     var fa=d.accounts[0].id; d.transactions.forEach(function(t){ if(!t.accountId)t.accountId=fa; }); return d; }
   function serialize(){ return clone({transactions:state.transactions,accounts:state.accounts,budgets:state.budgets,categories:state.categories,
-    recurring:state.recurring,goals:state.goals,settings:state.settings,members:state.members,household:state.household,ownerId:state.ownerId}); }
+    recurring:state.recurring,goals:state.goals,settings:state.settings,members:state.members,household:state.household,ownerId:state.ownerId,settlements:state.settlements||[]}); }
+  // ---------------- settle up (who owes whom) ----------------
+  function otherMember(){ var ids=Object.keys(state.members||{}); for(var i=0;i<ids.length;i++){ if(ids[i]!==(conn&&conn.memberId))return ids[i]; } return null; }
+  function memberName(id){ var m=state.members&&state.members[id]; return m?m.name:'Someone'; }
+  // Net owed TO me (positive => partner owes me; negative => I owe partner).
+  function settleBalance(){ var me=conn&&conn.memberId, other=otherMember(); if(!me||!other)return {net:0,me:me,other:other};
+    var raw=0;
+    state.transactions.forEach(function(t){ if(t.type!=='expense')return; if(t.shared===false)return; var payer=t.paidBy||t.by; if(!payer)return;
+      if(payer!==me&&payer!==other)return; var s=t.amount/2; if(payer===me)raw+=s; else raw-=s; });
+    (state.settlements||[]).forEach(function(x){ if(x.from===me&&x.to===other)raw+=x.amount; else if(x.from===other&&x.to===me)raw-=x.amount; });
+    return {net:Math.round(raw),me:me,other:other}; }
   function save(){ if(!connected||!conn||!conn.hid||!fdb)return; clearTimeout(pushT);
     pushT=setTimeout(function(){ fdb.collection('households').doc(conn.hid).set(serialize()).catch(function(e){ ui.syncErr=e.message; render(); }); },300); }
 
@@ -493,6 +503,13 @@
       (!over&&budget>0?'<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--s-divider);display:flex;justify-content:space-between;align-items:center"><span class="sub">Safe to spend today</span><span class="tnum" style="font-weight:800;font-size:16px;color:var(--s-brand)">'+money(safe)+'</span></div>':'')+
       '</div>';
     h+='<div class="tiles mt">'+tile('arrDown','Income',money(s.inc),'var(--s-pos)')+tile('arrUp','Expenses',money(s.exp),'var(--s-neg)')+tile('wallet','Net',money(s.net,{sign:true}),s.net>=0?'var(--s-pos)':'var(--s-neg)')+'</div>';
+    // Settle up (household with 2+ members)
+    if(Object.keys(state.members||{}).length>=2){ var sbal=settleBalance(), oname=memberName(sbal.other), settled=sbal.net===0, iOwe=sbal.net<0, amtb=Math.abs(sbal.net);
+      h+='<div class="card mt"><div class="row between" style="align-items:center">'+
+        (settled
+          ? '<div class="row" style="gap:10px;align-items:center"><div class="chipico sm" style="background:var(--s-brand);color:#fff">'+ic('check')+'</div><div><div class="h">All settled up</div><div class="tiny">You & '+escapeHtml(oname)+' are even</div></div></div><span data-act="opensettle" class="sub brand" style="cursor:pointer">Details</span>'
+          : '<div><div class="sub">'+(iOwe?'You owe '+escapeHtml(oname):escapeHtml(oname)+' owes you')+'</div><div class="tnum" style="font-size:23px;font-weight:800;color:'+(iOwe?'var(--s-neg)':'var(--s-pos)')+'">'+money(amtb)+'</div></div><span data-act="opensettle" style="background:var(--s-brand);color:var(--s-on-brand);font-weight:800;font-size:13px;padding:11px 16px;border-radius:12px;cursor:pointer">Settle up</span>')+
+        '</div></div>'; }
     // Accounts / net worth
     h+='<div class="card mt"><div class="row between" style="margin-bottom:10px"><div><div class="sub">Net worth</div><div class="tnum" style="font-size:22px;font-weight:800;letter-spacing:-.02em">'+money(netWorth())+'</div></div><span class="sub brand" data-act="accts">Manage</span></div>'+
       state.accounts.map(function(a,i){ var bal=accountBalance(a.id); return '<div class="lrow" data-act="accedit" data-a="'+a.id+'" style="'+(i===0?'border-top:none':'')+'"><div class="chipico sm" style="background:'+hexA(a.color,0.16)+';color:'+a.color+'">'+ic(a.icon)+'</div>'+
@@ -625,6 +642,25 @@
   function catrowHTML(){ return catList(draft.type).map(function(c,i){ var on=c.id===draft.categoryId; return '<div class="catpick '+(on?'on':'')+'" data-act="pickcat" data-a="'+c.id+'"><div class="ring">'+chip(c,on,'')+'</div><span>'+c.name+'</span></div>'; }).join('')+
     '<div class="catpick" data-act="newcat" data-a="'+draft.type+'"><div class="ring"><div class="chipico" style="background:var(--s-sunken);color:var(--s-brand);border:1.5px dashed var(--s-ink3)">'+ic('plus')+'</div></div><span>New</span></div>'; }
   function accRowHTML(selId,act){ return state.accounts.map(function(a){ var on=a.id===selId; return '<div class="catpick '+(on?'on':'')+'" data-act="'+act+'" data-a="'+a.id+'"><div class="ring"><div class="chipico" style="background:'+(on?a.color:hexA(a.color,0.15))+';color:'+(on?'#fff':a.color)+'">'+ic(a.icon)+'</div></div><span>'+escapeHtml(a.name)+'</span></div>'; }).join(''); }
+  function memberChips(selId,act){ return Object.keys(state.members||{}).map(function(mid){ var m=state.members[mid], on=mid===selId; return '<div class="catpick '+(on?'on':'')+'" data-act="'+act+'" data-a="'+mid+'"><div class="ring"><div class="chipico" style="background:'+(on?m.color:hexA(m.color,0.18))+';color:'+(on?'#fff':m.color)+'">'+ic('person')+'</div></div><span>'+escapeHtml(m.name)+(mid===(conn&&conn.memberId)?' (you)':'')+'</span></div>'; }).join(''); }
+  function toggleUI(on){ return '<span style="display:inline-flex;width:44px;height:26px;border-radius:13px;background:'+(on?'var(--s-brand)':'var(--s-sunken)')+';padding:3px"><span style="width:20px;height:20px;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s;transform:translateX('+(on?'18px':'0')+')"></span></span>'; }
+  function settleModal(){
+    var sb=settleBalance(), me=sb.me, other=sb.other, oname=memberName(other);
+    var myPaid=0,oPaid=0; state.transactions.forEach(function(t){ if(t.type!=='expense'||t.shared===false)return; var p=t.paidBy||t.by; if(p===me)myPaid+=t.amount; else if(p===other)oPaid+=t.amount; });
+    var iOwe=sb.net<0, amt=Math.abs(sb.net);
+    var head = sb.net===0? '<div class="h" style="font-size:19px">You\'re all settled up 🎉</div>' :
+      '<div class="tiny">'+(iOwe?'You owe '+escapeHtml(oname):escapeHtml(oname)+' owes you')+'</div><div class="tnum" style="font-size:30px;font-weight:800;color:'+(iOwe?'var(--s-neg)':'var(--s-pos)')+'">'+money(amt)+'</div>';
+    var hist=(state.settlements||[]).slice().reverse().slice(0,4).map(function(x){ return '<div class="lrow" style="cursor:default"><div class="chipico sm" style="background:var(--s-sunken);color:var(--s-ink2)">'+ic('check')+'</div><div class="grow"><div class="nm">'+escapeHtml(memberName(x.from))+' → '+escapeHtml(memberName(x.to))+'</div><div class="tiny">'+friendly(x.date)+'</div></div><div class="amt tnum">'+money(x.amount)+'</div></div>'; }).join('');
+    return '<div class="overlay" data-act="backdrop"><div class="sheet" data-stop="1" style="max-height:94%;overflow-y:auto">'+
+      '<div class="headerbar" style="padding:18px 18px 6px"><span class="h" style="font-size:20px">Settle up</span><span data-act="close" style="cursor:pointer">'+ic('close')+'</span></div>'+
+      '<div style="text-align:center;padding:6px 0 14px">'+head+'</div>'+
+      '<div class="card" style="margin:0 16px"><div class="sub" style="margin-bottom:8px">Shared expenses so far</div>'+
+        '<div class="row between" style="padding:5px 0"><span>You paid</span><span class="tnum" style="font-weight:700">'+money(myPaid)+'</span></div>'+
+        '<div class="row between" style="padding:5px 0;border-top:1px solid var(--s-divider)"><span>'+escapeHtml(oname)+' paid</span><span class="tnum" style="font-weight:700">'+money(oPaid)+'</span></div></div>'+
+      (sb.net!==0?'<div style="padding:14px 16px 0"><div class="cta" data-act="settle" style="margin:0">Mark settled — '+(iOwe?'you paid '+escapeHtml(oname):escapeHtml(oname)+' paid you')+' '+money(amt)+'</div></div>':'')+
+      (hist?'<div class="sechead" style="margin:18px 20px 6px">Recent settlements</div><div class="card" style="margin:0 16px;padding:4px 14px">'+hist+'</div>':'')+
+      '<div style="height:calc(20px + env(safe-area-inset-bottom))"></div></div></div>';
+  }
   function splitSummaryHTML(){ var sum=draft.splits.reduce(function(a,s){return a+s.amount;},0);
     return '<div style="padding:2px 16px 0"><div class="card" style="padding:10px 14px"><div class="row between" style="margin-bottom:4px"><span class="sub">Split · '+draft.splits.length+' categories</span><span class="sub brand" data-act="opensplit" style="cursor:pointer">Edit</span></div>'+
       draft.splits.map(function(s){ var c=getCat(s.categoryId); return '<div class="row" style="gap:10px;padding:5px 0"><div class="chipico sm" style="width:30px;height:30px;background:'+hexA(c.color,0.15)+';color:'+c.color+'">'+ic(c.icon)+'</div><span class="grow" style="font-size:14px;font-weight:600">'+c.name+'</span><span class="tnum" style="font-weight:700">'+money(s.amount)+'</span></div>'; }).join('')+
@@ -648,6 +684,10 @@
       mid+='<div class="catrow" id="catrow">'+catrowHTML()+'</div>'+
            '<div style="padding:2px 20px 0"><span data-act="opensplit" style="color:var(--s-brand);font-weight:700;font-size:12px;cursor:pointer">＋ Split across categories</span></div>'+
            '<div class="sechead" style="margin:8px 18px 5px">Account</div><div class="catrow" id="accrow">'+accRowHTML(draft.accountId,'pickacc')+'</div>';
+    }
+    if(draft.type==='expense' && Object.keys(state.members||{}).length>=2){
+      mid+='<div class="sechead" style="margin:8px 18px 5px">Paid by</div><div class="catrow" id="paidrow">'+memberChips(draft.paidBy||(conn&&conn.memberId),'pickpaid')+'</div>'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 20px 2px"><span class="sub">Shared 50/50 with '+escapeHtml(memberName(otherMember()))+'</span><span data-act="togshared" style="cursor:pointer">'+toggleUI(draft.shared!==false)+'</span></div>';
     }
     mid+='<div style="display:flex;gap:10px;padding:6px 18px 14px"><div class="field grow">'+ic('edit')+'<input placeholder="Add a note" data-inp="note" value="'+escapeHtml(draft.note)+'"></div>'+
       '<div class="field" style="width:auto;gap:2px;padding:0 6px"><span data-act="date" data-a="-1" style="cursor:pointer;padding:6px;color:var(--s-ink2);width:16px">'+ic('chevL')+'</span>'+
@@ -938,7 +978,7 @@
       ui.modal==='accounts'?accountsModal(): ui.modal==='accedit'?accountEditModal():
       ui.modal==='recurring'?recurModal(): ui.modal==='recedit'?recurEditModal():
       ui.modal==='backup'?backupModal(): ui.modal==='import'?importModal():
-      ui.modal==='goals'?goalsModal(): ui.modal==='goaledit'?goalEditModal(): ui.modal==='split'?splitModal(): ui.modal==='fxpick'?fxModal():
+      ui.modal==='goals'?goalsModal(): ui.modal==='goaledit'?goalEditModal(): ui.modal==='split'?splitModal(): ui.modal==='fxpick'?fxModal(): ui.modal==='settle'?settleModal():
       ui.modal&&ui.modal.indexOf('budget:')===0?budgetModal(ui.modal.slice(7)) : '';
     var toastHTML = ui.toast?('<div class="toast">'+ic('check')+'<span>'+ui.toast+'</span>'+(ui.toastUndo&&undoTxn?'<span data-act="undo" style="margin-left:12px;color:var(--s-brand);font-weight:800;cursor:pointer">Undo</span>':'')+'</div>'):'';
     app.innerHTML = statusBar()+'<div class="content" id="content">'+screenHTML()+'</div>'+tabbar()+modal+toastHTML;
@@ -949,11 +989,11 @@
 
   // ---------------- actions ----------------
   function openAdd(){ var a0=state.accounts[0].id, a1=(state.accounts[1]||state.accounts[0]).id;
-    draft={type:'expense',amount:'',categoryId:(catList('expense')[0]||{id:'other'}).id,accountId:a0,toAccountId:a1,fxCur:null,fxSym:null,fxRate:1,note:'',date:iso(new Date())}; ui.modal='add'; render(); }
+    draft={type:'expense',amount:'',categoryId:(catList('expense')[0]||{id:'other'}).id,accountId:a0,toAccountId:a1,fxCur:null,fxSym:null,fxRate:1,paidBy:(conn&&conn.memberId)||null,shared:true,note:'',date:iso(new Date())}; ui.modal='add'; render(); }
   function openEdit(id){ var t=state.transactions.find(function(x){return x.id===id;}); if(!t)return;
     draft={id:t.id,type:t.type,amount:String(t.fx?t.fx.amount:t.amount),fxCur:t.fx?t.fx.cur:null,fxSym:t.fx?t.fx.sym:null,fxRate:t.fx?t.fx.rate:1,categoryId:t.categoryId||(catList(t.type==='income'?'income':'expense')[0]||{id:'other'}).id,
       accountId:t.accountId||state.accounts[0].id,toAccountId:t.toAccountId||(state.accounts[1]||state.accounts[0]).id,
-      splits:t.splits?t.splits.map(function(s){return {categoryId:s.categoryId,amount:s.amount};}):null,tags:t.tags?t.tags.slice():null,note:t.note,date:t.date,createdAt:t.createdAt}; ui.modal='edit'; render(); }
+      splits:t.splits?t.splits.map(function(s){return {categoryId:s.categoryId,amount:s.amount};}):null,tags:t.tags?t.tags.slice():null,paidBy:t.paidBy||t.by||null,shared:t.shared!==false,note:t.note,date:t.date,createdAt:t.createdAt}; ui.modal='edit'; render(); }
   function closeModal(){ ui.modal=null; draft=null; render(); }
   function commitAmountKey(k){
     var v=draft.amount;
@@ -982,6 +1022,7 @@
       if(foreign) rec.fx={cur:draft.fxCur,sym:draft.fxSym,amount:amt,rate:draft.fxRate};
     }
     if(tags.length) rec.tags=tags;
+    if(rec.type==='expense' && Object.keys(state.members||{}).length>=2){ rec.paidBy=draft.paidBy||(conn&&conn.memberId); if(draft.shared===false)rec.shared=false; }
     if(ui.modal==='edit'){ var idx=state.transactions.findIndex(function(x){return x.id===draft.id;}); if(idx>=0){ rec.id=draft.id; rec.createdAt=draft.createdAt; if(state.transactions[idx].by)rec.by=state.transactions[idx].by; state.transactions[idx]=rec; } }
     else { rec.id=uid(); rec.createdAt=Date.now(); if(conn&&conn.memberId)rec.by=conn.memberId; state.transactions.unshift(rec); }
     sortT(); save(); var wasEdit=ui.modal==='edit'; ui.modal=null; draft=null; render(); toast(wasEdit?'Saved':(rec.type==='transfer'?'Transferred':'Added '+money(amt)));
@@ -1018,6 +1059,7 @@
         else if(ui.modal==='goals'){ ui.modal=ui.mgrReturn||null; render(); }
         else if(ui.modal==='split'){ ui.modal=ui.splitReturn||'add'; render(); }
         else if(ui.modal==='fxpick'){ ui.modal=ui.fxReturn||'add'; render(); }
+        else if(ui.modal==='settle'){ ui.modal=null; render(); }
         else closeModal();
         break;
       case 'cancelpin': ui.pinScreen=false; pinBuf=''; pinMode='unlock'; ui.pinErr=false; render(); break;
@@ -1135,6 +1177,12 @@
       case 'delete': deleteTxn(); break;
       case 'pickcat': draft.categoryId=a; document.getElementById('catrow').innerHTML=catrowHTML(); break;
       case 'pickacc': draft.accountId=a; document.getElementById('accrow').innerHTML=accRowHTML(a,'pickacc'); break;
+      case 'pickpaid': draft.paidBy=a; document.getElementById('paidrow').innerHTML=memberChips(a,'pickpaid'); break;
+      case 'togshared': { captureForm(); draft.shared=!(draft.shared!==false); render(); break; }
+      case 'opensettle': ui.modal='settle'; render(); break;
+      case 'settle': { var sb=settleBalance(); if(sb.net===0){ toast('Already settled'); break; } var s2={id:'s'+uid(),date:iso(new Date()),by:conn&&conn.memberId};
+        if(sb.net>0){ s2.from=sb.other; s2.to=sb.me; s2.amount=sb.net; } else { s2.from=sb.me; s2.to=sb.other; s2.amount=-sb.net; }
+        if(!state.settlements)state.settlements=[]; state.settlements.push(s2); save(); ui.modal=null; render(); toast('Settled up'); break; }
       case 'pickfrom': draft.accountId=a; document.getElementById('fromrow').innerHTML=accRowHTML(a,'pickfrom'); break;
       case 'pickto': draft.toAccountId=a; document.getElementById('torow').innerHTML=accRowHTML(a,'pickto'); break;
       case 'dtype': if(draft.type!==a){ captureForm(); draft.type=a;
