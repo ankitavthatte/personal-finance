@@ -1,12 +1,5 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Pennywise Household</title>
+<title>Pennywise — Live App</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <style>
   :root {
     --s-bg:#f5f6f8; --s-surface:#fff; --s-sunken:#eef0f3;
@@ -185,8 +178,6 @@
   @media (prefers-reduced-motion:reduce){ *{ animation-duration:.001s!important;transition-duration:.001s!important; } }
 </style>
 
-</head>
-<body>
 <div id="app">
   <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;background:#f5f6f8;color:#0f1417">
     <div style="width:74px;height:74px;border-radius:22px;background:linear-gradient(140deg,#0b7a5b,#12a277);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 26px -8px rgba(11,122,91,.6)">
@@ -257,9 +248,6 @@
     lock:P('<rect x="4.5" y="10" width="15" height="11" rx="2.6"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.3"/>'),
     tag:P('<path d="M20.5 13.4 12.6 21.3a1.5 1.5 0 0 1-2.1 0L3 13.8V4.5A1.5 1.5 0 0 1 4.5 3h9.3l6.7 6.7a1.5 1.5 0 0 1 0 2.1z"/><circle cx="7.8" cy="7.8" r="1.4"/>'),
     globe:P('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.7 3.8 9S14.5 18.5 12 21c-2.5-2.5-3.8-5.7-3.8-9S9.5 5.5 12 3z"/>'),
-    copy:P('<rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/>'),
-    logout:P('<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M4 12h11M12 9l-3 3 3 3"/>'),
-    people:P('<circle cx="8.5" cy="9" r="3"/><path d="M2.5 19a6 6 0 0 1 12 0"/><path d="M16 6.2a3 3 0 0 1 0 5.6M21.5 19a6 6 0 0 0-4.5-5.8"/>'),
     signal:F('<rect x="2" y="14" width="3.4" height="6" rx="1"/><rect x="7.5" y="10" width="3.4" height="10" rx="1"/><rect x="13" y="6" width="3.4" height="14" rx="1"/><rect x="18.5" y="3" width="3.4" height="17" rx="1"/>')
   };
   var ic=function(n){ return ICONS[n]||''; };
@@ -347,71 +335,20 @@
     accounts: defaultAccounts(sample), recurring: sample?defaultRecurring():[], goals: sample?defaultGoals():[],
     budgets:{groceries:9000,dining:6000,transport:4000,shopping:5000,bills:5000,entertainment:3000,subs:1500,coffee:2000},
     settings:{sym:'₹',cur:'INR',monthlyBudget:45000,name:'Ankita',theme:'system',lock:false,pin:''} }; }
-  // ---------------- Firebase-backed sync (shared household) ----------------
-  var CONN_KEY='pennywise-conn-v1';
-  var conn=null, fdb=null, fauth=null, connected=false, unsub=null, pushT=null;
-  var CODE_ALPHA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  function clone(o){ return JSON.parse(JSON.stringify(o)); }
-  function loadConn(){ try{ return JSON.parse(localStorage.getItem(CONN_KEY)||'null'); }catch(e){ return null; } }
-  function saveConn(){ try{ localStorage.setItem(CONN_KEY,JSON.stringify(conn)); }catch(e){} }
-  function hhCode(){ var s=''; for(var i=0;i<8;i++) s+=CODE_ALPHA[Math.floor(Math.random()*CODE_ALPHA.length)]; return s; }
-  function fmtCode(c){ return c?c.slice(0,4)+'-'+c.slice(4):''; }
-  function parseConfig(text){ var m=String(text||'').match(/\{[\s\S]*\}/); if(!m)return null;
-    var s=m[0].replace(/([,{]\s*)([A-Za-z0-9_]+)\s*:/g,'$1"$2":').replace(/'/g,'"').replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
-    try{ var o=JSON.parse(s); if(o.apiKey&&o.projectId)return o; }catch(e){} return null; }
-
-  function migrate(d){ d=d||{}; if(!d.transactions)d.transactions=[]; if(!d.categories||!d.categories.length)d.categories=copyCats();
-    if(!d.accounts||!d.accounts.length)d.accounts=defaultAccounts(false); if(!d.recurring)d.recurring=[]; if(!d.goals)d.goals=[];
-    if(!d.members)d.members={}; if(!d.household)d.household={name:'Our Household'}; if(!d.settlements)d.settlements=[];
-    if(!d.settings)d.settings={sym:'₹',cur:'INR',monthlyBudget:45000,name:'there',theme:'system',lock:false,pin:''};
-    if(d.settings.lock===undefined)d.settings.lock=false; if(d.settings.pin===undefined)d.settings.pin='';
-    var fa=d.accounts[0].id; d.transactions.forEach(function(t){ if(!t.accountId)t.accountId=fa; }); return d; }
-  function serialize(){ return clone({transactions:state.transactions,accounts:state.accounts,budgets:state.budgets,categories:state.categories,
-    recurring:state.recurring,goals:state.goals,settings:state.settings,members:state.members,household:state.household,ownerId:state.ownerId,settlements:state.settlements||[]}); }
-  // ---------------- settle up (who owes whom) ----------------
-  function otherMember(){ var ids=Object.keys(state.members||{}); for(var i=0;i<ids.length;i++){ if(ids[i]!==(conn&&conn.memberId))return ids[i]; } return null; }
-  function memberName(id){ var m=state.members&&state.members[id]; return m?m.name:'Someone'; }
-  // Net owed TO me (positive => partner owes me; negative => I owe partner).
-  function settleBalance(){ var me=conn&&conn.memberId, other=otherMember(); if(!me||!other)return {net:0,me:me,other:other};
-    var raw=0;
-    state.transactions.forEach(function(t){ if(t.type!=='expense')return; if(t.shared===false)return; var payer=t.paidBy||t.by; if(!payer)return;
-      if(payer!==me&&payer!==other)return; var s=t.amount/2; if(payer===me)raw+=s; else raw-=s; });
-    (state.settlements||[]).forEach(function(x){ if(x.from===me&&x.to===other)raw+=x.amount; else if(x.from===other&&x.to===me)raw-=x.amount; });
-    return {net:Math.round(raw),me:me,other:other}; }
-  function save(){ if(!connected||!conn||!conn.hid||!fdb)return; clearTimeout(pushT);
-    pushT=setTimeout(function(){ fdb.collection('households').doc(conn.hid).set(serialize()).catch(function(e){ ui.syncErr=e.message; render(); }); },300); }
-
-  function initFirebase(config){ if(typeof firebase==='undefined') throw new Error('Firebase SDK not loaded (are you online?)');
-    if(!firebase.apps||!firebase.apps.length){ firebase.initializeApp(config); } fdb=firebase.firestore(); fauth=firebase.auth(); }
-  function ensureMember(){ if(!state.members) state.members={}; if(!state.members[conn.memberId]){
-    var used=Object.keys(state.members).length; state.members[conn.memberId]={name:conn.memberName||'Member',color:COLOR_CHOICES[used%COLOR_CHOICES.length]}; save(); } }
-  function applyDoc(data){ state=migrate(data); rebuildCat(); ensureMember();
-    if(state.ownerId===conn.memberId) runRecurring();
-    connected=true; ui.connect=null; ui.syncErr=null;
-    if(!ui.modal) render(); }
-  function subscribe(hid){ if(unsub)unsub(); ui.connect='loading'; render();
-    unsub=fdb.collection('households').doc(hid).onSnapshot(function(snap){
-      if(!snap.exists){ ui.connect='notfound'; render(); return; } applyDoc(snap.data());
-    }, function(err){ ui.connectErr=err.message; ui.connect='error'; render(); }); }
-  function createHousehold(hhname,myname){ var code=hhCode(), mid='m'+uid();
-    conn={config:conn.config,hid:code,memberId:mid,memberName:myname}; saveConn();
-    var st=fresh(false); st.settings.name=myname; st.household={name:hhname||'Our Household'};
-    st.members={}; st.members[mid]={name:myname,color:COLOR_CHOICES[0]}; st.ownerId=mid;
-    ui.connect='loading'; render();
-    fdb.collection('households').doc(code).set(clone(st)).then(function(){ subscribe(code); })
-      .catch(function(e){ ui.connectErr=e.message; ui.connect='error'; render(); }); }
-  function joinHousehold(code,myname){ code=(code||'').toUpperCase().replace(/[^A-Z0-9]/g,''); if(code.length<6){ toast('Enter a valid household code'); return; }
-    var mid='m'+uid(); conn={config:conn.config,hid:code,memberId:mid,memberName:myname}; saveConn(); subscribe(code); }
-  function leaveHousehold(){ if(unsub){ unsub(); unsub=null; } connected=false; state=null;
-    conn={config:conn.config}; saveConn(); ui.modal=null; ui.connect='household'; render(); }
-
-  function boot(){ conn=loadConn();
-    if(!conn||!conn.config){ ui.connect='config'; render(); return; }
-    try{ initFirebase(conn.config); }catch(e){ ui.connectErr=e.message; ui.connect='config'; render(); return; }
-    ui.connect='loading'; render();
-    fauth.signInAnonymously().then(function(){
-      if(!conn.hid){ ui.connect='household'; render(); return; } subscribe(conn.hid);
-    }).catch(function(err){ ui.connectErr='Sign-in failed: '+err.message+'. Enable Anonymous sign-in in Firebase → Authentication.'; ui.connect='error'; render(); }); }
+  function load(){ try{ var r=localStorage.getItem(KEY); if(r){ state=JSON.parse(r); } }catch(e){}
+    if(!state){ state=fresh(true); save(); }
+    if(!state.categories||!state.categories.length){ state.categories=copyCats(); }
+    if(!state.accounts||!state.accounts.length){ state.accounts=defaultAccounts(false); }
+    if(!state.recurring){ state.recurring=[]; }
+    if(!state.goals){ state.goals=[]; }
+    if(!state.settings){ state.settings={sym:'₹',cur:'INR',monthlyBudget:45000,name:'there',theme:'system',lock:false,pin:''}; }
+    if(state.settings.lock===undefined) state.settings.lock=false;
+    if(state.settings.pin===undefined) state.settings.pin='';
+    // Assign a home account to any legacy transaction that lacks one.
+    var firstAcc=state.accounts[0].id;
+    state.transactions.forEach(function(t){ if(!t.accountId) t.accountId=firstAcc; });
+    rebuildCat(); runRecurring(); }
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){} }
   function sortT(){ state.transactions.sort(function(a,b){ return a.date!==b.date?(a.date<b.date?1:-1):b.createdAt-a.createdAt; }); }
 
   // ---------------- accounts & transfers ----------------
@@ -436,8 +373,7 @@
   function runRecurring(){ var today=iso(new Date()), posted=0;
     (state.recurring||[]).forEach(function(r){ var guard=0;
       while(r.nextDate<=today && guard<120){ guard++;
-        var dup=state.transactions.some(function(t){ return t.recurringId===r.id && t.date===r.nextDate; });
-        if(!dup) state.transactions.unshift({id:uid(),type:r.type,amount:r.amount,categoryId:r.categoryId,accountId:r.accountId,note:r.note,date:r.nextDate,createdAt:Date.now(),recurringId:r.id,by:state.ownerId});
+        state.transactions.unshift({id:uid(),type:r.type,amount:r.amount,categoryId:r.categoryId,accountId:r.accountId,note:r.note,date:r.nextDate,createdAt:Date.now(),recurringId:r.id});
         r.nextDate=advanceDate(r.nextDate,r.freq); posted++;
       }
     });
@@ -468,17 +404,15 @@
     function t(x){ return '<div class="tab '+(ui.tab===x[0]?'on':'')+'" data-act="tab" data-a="'+x[0]+'">'+ic(x[2])+'<span>'+x[1]+'</span></div>'; }
     return '<div class="tabbar"><div class="tabinner">'+t(T[0])+t(T[1])+'<div class="fab" data-act="add">'+ic('plus')+'</div>'+t(T[2])+t(T[3])+'</div></div>'; }
 
-  function whoBy(t){ var m=t.by&&state.members?state.members[t.by]:null; return m?'<span style="color:'+(m.color||'var(--s-ink3)')+'">'+escapeHtml(m.name)+'</span>':''; }
   function txnRow(t){
-    var who=whoBy(t), whoS=who?' · '+who:'';
     if(t.type==='transfer'){ var fa=getAccount(t.accountId), ta=getAccount(t.toAccountId);
       return '<div class="lrow" data-act="edit" data-a="'+t.id+'"><div class="chipico sm" style="background:var(--s-sunken);color:var(--s-ink2)">'+ic('swap')+'</div>'+
-        '<div class="grow"><div class="nm">'+(escapeHtml(t.note)||'Transfer')+'</div><div class="tiny">'+escapeHtml(fa.name)+' → '+escapeHtml(ta.name)+' · '+friendly(t.date)+whoS+'</div></div>'+
+        '<div class="grow"><div class="nm">'+(escapeHtml(t.note)||'Transfer')+'</div><div class="tiny">'+escapeHtml(fa.name)+' → '+escapeHtml(ta.name)+' · '+friendly(t.date)+'</div></div>'+
         '<div class="amt tnum" style="color:var(--s-ink2)">'+money(t.amount)+'</div></div>'; }
     var c=getCat(t.categoryId),inc=t.type==='income', isSplit=t.splits&&t.splits.length>1;
     var tg=t.tags&&t.tags.length?' · '+t.tags.map(function(x){return '#'+x;}).join(' '):'';
     var fxs=t.fx?' · '+t.fx.sym+t.fx.amount.toLocaleString('en-IN'):'';
-    var sub=(isSplit?'Split · '+t.splits.length+' categories':c.name)+' · '+friendly(t.date)+fxs+tg+whoS;
+    var sub=(isSplit?'Split · '+t.splits.length+' categories':c.name)+' · '+friendly(t.date)+fxs+tg;
     return '<div class="lrow" data-act="edit" data-a="'+t.id+'">'+chip(c,false,'sm')+
       '<div class="grow"><div class="nm">'+(escapeHtml(t.note)||c.name)+'</div><div class="tiny">'+sub+'</div></div>'+
       '<div class="amt tnum" style="color:'+(inc?'var(--s-pos)':'var(--s-ink)')+'">'+(inc?'+':'−')+money(t.amount).replace('−','')+'</div></div>'; }
@@ -503,13 +437,6 @@
       (!over&&budget>0?'<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--s-divider);display:flex;justify-content:space-between;align-items:center"><span class="sub">Safe to spend today</span><span class="tnum" style="font-weight:800;font-size:16px;color:var(--s-brand)">'+money(safe)+'</span></div>':'')+
       '</div>';
     h+='<div class="tiles mt">'+tile('arrDown','Income',money(s.inc),'var(--s-pos)')+tile('arrUp','Expenses',money(s.exp),'var(--s-neg)')+tile('wallet','Net',money(s.net,{sign:true}),s.net>=0?'var(--s-pos)':'var(--s-neg)')+'</div>';
-    // Settle up (household with 2+ members)
-    if(Object.keys(state.members||{}).length>=2){ var sbal=settleBalance(), oname=memberName(sbal.other), settled=sbal.net===0, iOwe=sbal.net<0, amtb=Math.abs(sbal.net);
-      h+='<div class="card mt"><div class="row between" style="align-items:center">'+
-        (settled
-          ? '<div class="row" style="gap:10px;align-items:center"><div class="chipico sm" style="background:var(--s-brand);color:#fff">'+ic('check')+'</div><div><div class="h">All settled up</div><div class="tiny">You & '+escapeHtml(oname)+' are even</div></div></div><span data-act="opensettle" class="sub brand" style="cursor:pointer">Details</span>'
-          : '<div><div class="sub">'+(iOwe?'You owe '+escapeHtml(oname):escapeHtml(oname)+' owes you')+'</div><div class="tnum" style="font-size:23px;font-weight:800;color:'+(iOwe?'var(--s-neg)':'var(--s-pos)')+'">'+money(amtb)+'</div></div><span data-act="opensettle" style="background:var(--s-brand);color:var(--s-on-brand);font-weight:800;font-size:13px;padding:11px 16px;border-radius:12px;cursor:pointer">Settle up</span>')+
-        '</div></div>'; }
     // Accounts / net worth
     h+='<div class="card mt"><div class="row between" style="margin-bottom:10px"><div><div class="sub">Net worth</div><div class="tnum" style="font-size:22px;font-weight:800;letter-spacing:-.02em">'+money(netWorth())+'</div></div><span class="sub brand" data-act="accts">Manage</span></div>'+
       state.accounts.map(function(a,i){ var bal=accountBalance(a.id); return '<div class="lrow" data-act="accedit" data-a="'+a.id+'" style="'+(i===0?'border-top:none':'')+'"><div class="chipico sm" style="background:'+hexA(a.color,0.16)+';color:'+a.color+'">'+ic(a.icon)+'</div>'+
@@ -642,25 +569,6 @@
   function catrowHTML(){ return catList(draft.type).map(function(c,i){ var on=c.id===draft.categoryId; return '<div class="catpick '+(on?'on':'')+'" data-act="pickcat" data-a="'+c.id+'"><div class="ring">'+chip(c,on,'')+'</div><span>'+c.name+'</span></div>'; }).join('')+
     '<div class="catpick" data-act="newcat" data-a="'+draft.type+'"><div class="ring"><div class="chipico" style="background:var(--s-sunken);color:var(--s-brand);border:1.5px dashed var(--s-ink3)">'+ic('plus')+'</div></div><span>New</span></div>'; }
   function accRowHTML(selId,act){ return state.accounts.map(function(a){ var on=a.id===selId; return '<div class="catpick '+(on?'on':'')+'" data-act="'+act+'" data-a="'+a.id+'"><div class="ring"><div class="chipico" style="background:'+(on?a.color:hexA(a.color,0.15))+';color:'+(on?'#fff':a.color)+'">'+ic(a.icon)+'</div></div><span>'+escapeHtml(a.name)+'</span></div>'; }).join(''); }
-  function memberChips(selId,act){ return Object.keys(state.members||{}).map(function(mid){ var m=state.members[mid], on=mid===selId; return '<div class="catpick '+(on?'on':'')+'" data-act="'+act+'" data-a="'+mid+'"><div class="ring"><div class="chipico" style="background:'+(on?m.color:hexA(m.color,0.18))+';color:'+(on?'#fff':m.color)+'">'+ic('person')+'</div></div><span>'+escapeHtml(m.name)+(mid===(conn&&conn.memberId)?' (you)':'')+'</span></div>'; }).join(''); }
-  function toggleUI(on){ return '<span style="display:inline-flex;width:44px;height:26px;border-radius:13px;background:'+(on?'var(--s-brand)':'var(--s-sunken)')+';padding:3px"><span style="width:20px;height:20px;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s;transform:translateX('+(on?'18px':'0')+')"></span></span>'; }
-  function settleModal(){
-    var sb=settleBalance(), me=sb.me, other=sb.other, oname=memberName(other);
-    var myPaid=0,oPaid=0; state.transactions.forEach(function(t){ if(t.type!=='expense'||t.shared===false)return; var p=t.paidBy||t.by; if(p===me)myPaid+=t.amount; else if(p===other)oPaid+=t.amount; });
-    var iOwe=sb.net<0, amt=Math.abs(sb.net);
-    var head = sb.net===0? '<div class="h" style="font-size:19px">You\'re all settled up 🎉</div>' :
-      '<div class="tiny">'+(iOwe?'You owe '+escapeHtml(oname):escapeHtml(oname)+' owes you')+'</div><div class="tnum" style="font-size:30px;font-weight:800;color:'+(iOwe?'var(--s-neg)':'var(--s-pos)')+'">'+money(amt)+'</div>';
-    var hist=(state.settlements||[]).slice().reverse().slice(0,4).map(function(x){ return '<div class="lrow" style="cursor:default"><div class="chipico sm" style="background:var(--s-sunken);color:var(--s-ink2)">'+ic('check')+'</div><div class="grow"><div class="nm">'+escapeHtml(memberName(x.from))+' → '+escapeHtml(memberName(x.to))+'</div><div class="tiny">'+friendly(x.date)+'</div></div><div class="amt tnum">'+money(x.amount)+'</div></div>'; }).join('');
-    return '<div class="overlay" data-act="backdrop"><div class="sheet" data-stop="1" style="max-height:94%;overflow-y:auto">'+
-      '<div class="headerbar" style="padding:18px 18px 6px"><span class="h" style="font-size:20px">Settle up</span><span data-act="close" style="cursor:pointer">'+ic('close')+'</span></div>'+
-      '<div style="text-align:center;padding:6px 0 14px">'+head+'</div>'+
-      '<div class="card" style="margin:0 16px"><div class="sub" style="margin-bottom:8px">Shared expenses so far</div>'+
-        '<div class="row between" style="padding:5px 0"><span>You paid</span><span class="tnum" style="font-weight:700">'+money(myPaid)+'</span></div>'+
-        '<div class="row between" style="padding:5px 0;border-top:1px solid var(--s-divider)"><span>'+escapeHtml(oname)+' paid</span><span class="tnum" style="font-weight:700">'+money(oPaid)+'</span></div></div>'+
-      (sb.net!==0?'<div style="padding:14px 16px 0"><div class="cta" data-act="settle" style="margin:0">Mark settled — '+(iOwe?'you paid '+escapeHtml(oname):escapeHtml(oname)+' paid you')+' '+money(amt)+'</div></div>':'')+
-      (hist?'<div class="sechead" style="margin:18px 20px 6px">Recent settlements</div><div class="card" style="margin:0 16px;padding:4px 14px">'+hist+'</div>':'')+
-      '<div style="height:calc(20px + env(safe-area-inset-bottom))"></div></div></div>';
-  }
   function splitSummaryHTML(){ var sum=draft.splits.reduce(function(a,s){return a+s.amount;},0);
     return '<div style="padding:2px 16px 0"><div class="card" style="padding:10px 14px"><div class="row between" style="margin-bottom:4px"><span class="sub">Split · '+draft.splits.length+' categories</span><span class="sub brand" data-act="opensplit" style="cursor:pointer">Edit</span></div>'+
       draft.splits.map(function(s){ var c=getCat(s.categoryId); return '<div class="row" style="gap:10px;padding:5px 0"><div class="chipico sm" style="width:30px;height:30px;background:'+hexA(c.color,0.15)+';color:'+c.color+'">'+ic(c.icon)+'</div><span class="grow" style="font-size:14px;font-weight:600">'+c.name+'</span><span class="tnum" style="font-weight:700">'+money(s.amount)+'</span></div>'; }).join('')+
@@ -685,10 +593,6 @@
            '<div style="padding:2px 20px 0"><span data-act="opensplit" style="color:var(--s-brand);font-weight:700;font-size:12px;cursor:pointer">＋ Split across categories</span></div>'+
            '<div class="sechead" style="margin:8px 18px 5px">Account</div><div class="catrow" id="accrow">'+accRowHTML(draft.accountId,'pickacc')+'</div>';
     }
-    if(draft.type==='expense' && Object.keys(state.members||{}).length>=2){
-      mid+='<div class="sechead" style="margin:8px 18px 5px">Paid by</div><div class="catrow" id="paidrow">'+memberChips(draft.paidBy||(conn&&conn.memberId),'pickpaid')+'</div>'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 20px 2px"><span class="sub">Shared 50/50 with '+escapeHtml(memberName(otherMember()))+'</span><span data-act="togshared" style="cursor:pointer">'+toggleUI(draft.shared!==false)+'</span></div>';
-    }
     mid+='<div style="display:flex;gap:10px;padding:6px 18px 14px"><div class="field grow">'+ic('edit')+'<input placeholder="Add a note" data-inp="note" value="'+escapeHtml(draft.note)+'"></div>'+
       '<div class="field" style="width:auto;gap:2px;padding:0 6px"><span data-act="date" data-a="-1" style="cursor:pointer;padding:6px;color:var(--s-ink2);width:16px">'+ic('chevL')+'</span>'+
       '<span id="dateLbl" style="font-size:12.5px;font-weight:700;min-width:66px;text-align:center">'+friendly(draft.date)+'</span>'+
@@ -707,15 +611,9 @@
   }
   function settingsModal(){
     var st=state.settings;
-    var membersRows=Object.keys(state.members||{}).map(function(mid){ var m=state.members[mid]; return '<div class="settingsrow"><div style="width:34px;display:grid;place-items:center"><div style="width:18px;height:18px;border-radius:9px;background:'+(m.color||'#64748b')+'"></div></div><span class="lbl">'+escapeHtml(m.name)+(mid===(conn&&conn.memberId)?' <span class="tiny">(you)</span>':'')+'</span></div>'; }).join('');
     var h='<div class="overlay" data-act="backdrop"><div class="sheet" data-stop="1" style="max-height:92%;overflow-y:auto">'+
       '<div class="headerbar" style="padding:18px 18px 6px"><span class="h" style="font-size:20px">Settings</span><span data-act="close" style="cursor:pointer">'+ic('close')+'</span></div>'+
-      '<div class="sechead" style="margin:12px 20px 6px">Household</div><div class="card" style="margin:0 16px;padding:0">'+
-        '<div class="settingsrow"><div style="width:34px;display:grid;place-items:center;color:var(--s-brand)">'+ic('home')+'</div><span class="lbl">'+escapeHtml((state.household&&state.household.name)||'Our Household')+'</span></div>'+
-        '<div class="settingsrow" data-act="hhcopy" style="cursor:pointer"><div style="width:34px;display:grid;place-items:center;color:var(--s-ink2)">'+ic('people')+'</div><span class="lbl">Invite code</span><span class="tnum" style="font-weight:800;letter-spacing:1.5px;margin-right:8px">'+fmtCode(conn&&conn.hid)+'</span>'+ic('copy')+'</div>'+
-        membersRows+
-        '<div class="settingsrow danger" data-act="leavehh" style="cursor:pointer"><div style="width:34px;display:grid;place-items:center">'+ic('logout')+'</div><span class="lbl">Leave household</span></div></div>'+
-      '<div class="sechead" style="margin:16px 20px 6px">Profile</div><div class="card" style="margin:0 16px;padding:0">'+
+      '<div class="sechead" style="margin:12px 20px 6px">Profile</div><div class="card" style="margin:0 16px;padding:0">'+
         '<div class="settingsrow">'+ic('person')+'<span class="lbl">Your name</span><input data-inp="name" value="'+escapeHtml(st.name)+'" placeholder="Add name"></div></div>'+
       '<div class="sechead" style="margin:16px 20px 6px">Preferences</div><div class="card" style="margin:0 16px;padding:0">'+
         '<div class="settingsrow">'+ic('flag')+'<span class="lbl">Monthly budget</span><input data-inp="mbudget" inputmode="numeric" value="'+st.monthlyBudget+'"></div>'+
@@ -928,57 +826,18 @@
   }
 
   // ---------------- app shell ----------------
-  // ---------------- connect / onboarding screens ----------------
-  function connectShell(title, body, sub){
-    return '<div style="min-height:100vh;background:var(--s-bg);color:var(--s-ink)"><div style="width:100%;max-width:480px;margin:0 auto;padding:28px 20px calc(40px + env(safe-area-inset-bottom))">'+
-      '<div style="display:flex;flex-direction:column;align-items:center;margin:18px 0 22px">'+
-      '<div style="width:64px;height:64px;border-radius:20px;background:linear-gradient(140deg,#0b7a5b,#12a277);display:grid;place-items:center;box-shadow:0 12px 26px -8px rgba(11,122,91,.6)"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3.5"/><path d="M16 12.5h4.2"/><path d="M3 9c0-1.6 1-2.6 3-3l9-2.2c1.6-.3 3 .5 3 2.2"/></svg></div>'+
-      '<div class="title" style="margin-top:14px;text-align:center">'+title+'</div>'+(sub?'<div class="sub" style="margin-top:6px;text-align:center">'+sub+'</div>':'')+'</div>'+
-      body+'</div></div>';
-  }
-  function cfield(label,key,val,ph){ return '<div style="margin-bottom:10px"><div class="tiny" style="margin:0 4px 5px">'+label+'</div><div class="field" style="height:50px"><input data-inp="'+key+'" value="'+escapeHtml(val||'')+'" placeholder="'+escapeHtml(ph||label)+'"></div></div>'; }
-  function connectScreen(){
-    var c=ui.connect, err=ui.connectErr?'<div class="tiny" style="color:var(--s-neg);margin-top:10px;text-align:center">'+escapeHtml(ui.connectErr)+'</div>':'';
-    if(c==='loading') return connectShell('Connecting…','<div class="tiny" style="text-align:center">One moment while we sync your household.</div>');
-    if(c==='error') return connectShell('Something went wrong','<div class="tiny" style="text-align:center;line-height:1.6">'+escapeHtml(ui.connectErr||'Please try again.')+'</div><div class="cta" data-act="retryboot" style="margin:18px 0 10px">Try again</div><div class="btn2" data-act="reconfig" style="width:100%">Use a different Firebase project</div>');
-    if(c==='notfound') return connectShell('Household not found','<div class="tiny" style="text-align:center;line-height:1.6">That code doesn\'t match any household. Check the code with your partner and try again.</div><div class="cta" data-act="backhh" style="margin:18px 0 0">Back</div>');
-    if(c==='config'){
-      var body='<div class="card" style="margin-bottom:14px"><div class="h" style="margin-bottom:8px">Set up sync (one time, ~5 min)</div>'+
-        '<div class="tiny" style="line-height:1.6">Pennywise keeps both your phones in sync using your own free Firebase project — your data stays yours.</div>'+
-        '<ol style="margin:10px 0 0;padding-left:18px;font-size:12.5px;color:var(--s-ink2);line-height:1.75">'+
-        '<li>Open <b>console.firebase.google.com</b> → <b>Add project</b>.</li>'+
-        '<li>Build → <b>Firestore Database</b> → Create (production mode), then set the Rules I gave you.</li>'+
-        '<li>Build → <b>Authentication</b> → Sign-in method → enable <b>Anonymous</b>.</li>'+
-        '<li>Project settings ⚙ → <b>Your apps</b> → Web <b>&lt;/&gt;</b> → register → copy the <b>firebaseConfig</b> object.</li></ol></div>'+
-        '<div class="sechead" style="margin:0 4px 8px">Paste your firebaseConfig</div>'+
-        '<textarea data-inp="fbconfig" placeholder=\'{ "apiKey": "…", "authDomain": "…", "projectId": "…", "appId": "…" }\' style="width:100%;height:148px;border-radius:16px;border:1px solid var(--s-border);background:var(--s-surface);color:var(--s-ink);padding:12px;font-family:ui-monospace,Menlo,monospace;font-size:12px;resize:none;outline:none"></textarea>'+
-        err+'<div class="cta" data-act="fbconnect" style="margin:14px 0 0">Connect</div>'+
-        '<div class="tiny" style="text-align:center;margin-top:14px">Your expenses live only in your Firebase project.</div>';
-      return connectShell('Pennywise Household', body, 'Shared expenses, in sync');
-    }
-    // household create / join
-    var tab=ui.hhTab||'create';
-    var body='<div class="seg" style="margin-bottom:16px"><div class="'+(tab==='create'?'on':'')+'" data-act="hhtab" data-a="create">Create</div><div class="'+(tab==='join'?'on':'')+'" data-act="hhtab" data-a="join">Join</div></div>'+
-      (tab==='create'
-        ? '<div class="card"><div class="h" style="margin-bottom:4px">Start a household</div><div class="tiny" style="margin-bottom:14px">You\'ll get a code to share with your partner.</div>'+cfield('Household name','hhname','','e.g. Home')+cfield('Your name','myname-create','','e.g. Ankita')+'<div class="cta" data-act="hhcreate" style="margin:14px 0 0">Create household</div></div>'
-        : '<div class="card"><div class="h" style="margin-bottom:4px">Join a household</div><div class="tiny" style="margin-bottom:14px">Enter the code your partner shared with you.</div>'+cfield('Household code','hhcode','','e.g. ABCD-1234')+cfield('Your name','myname-join','','e.g. Ravi')+'<div class="cta" data-act="hhjoin" style="margin:14px 0 0">Join household</div></div>')+
-      err+'<div class="tiny" style="text-align:center;margin-top:16px"><span data-act="reconfig" style="color:var(--s-brand);cursor:pointer">Use a different Firebase project</span></div>';
-    return connectShell('Almost there', body, 'Firebase connected ✓');
-  }
-  function isDark(){ var t=state&&state.settings?state.settings.theme:'system'; if(t==='dark')return true; if(t==='light')return false; return window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches; }
+  function isDark(){ var t=state.settings.theme; if(t==='dark')return true; if(t==='light')return false; return window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches; }
   function screenHTML(){ return ui.tab==='home'?homeScreen():ui.tab==='activity'?activityScreen():ui.tab==='budgets'?budgetsScreen():insightsScreen(); }
   function render(){
     var app=document.getElementById('app');
     app.className=isDark()?'dark':'light';
-    if(ui.connect){ app.innerHTML=connectScreen(); return; }
-    if(!state){ app.innerHTML=connectShell('Loading your household…',''); return; }
     if(ui.pinScreen || (state.settings.lock && state.settings.pin && !unlocked)){ app.innerHTML=lockScreen(); return; }
     var modal = ui.modal==='add'?formModal(false): ui.modal==='edit'?formModal(true): ui.modal==='settings'?settingsModal():
       ui.modal==='cats'?catsModal(): ui.modal==='catedit'?catEditModal():
       ui.modal==='accounts'?accountsModal(): ui.modal==='accedit'?accountEditModal():
       ui.modal==='recurring'?recurModal(): ui.modal==='recedit'?recurEditModal():
       ui.modal==='backup'?backupModal(): ui.modal==='import'?importModal():
-      ui.modal==='goals'?goalsModal(): ui.modal==='goaledit'?goalEditModal(): ui.modal==='split'?splitModal(): ui.modal==='fxpick'?fxModal(): ui.modal==='settle'?settleModal():
+      ui.modal==='goals'?goalsModal(): ui.modal==='goaledit'?goalEditModal(): ui.modal==='split'?splitModal(): ui.modal==='fxpick'?fxModal():
       ui.modal&&ui.modal.indexOf('budget:')===0?budgetModal(ui.modal.slice(7)) : '';
     var toastHTML = ui.toast?('<div class="toast">'+ic('check')+'<span>'+ui.toast+'</span>'+(ui.toastUndo&&undoTxn?'<span data-act="undo" style="margin-left:12px;color:var(--s-brand);font-weight:800;cursor:pointer">Undo</span>':'')+'</div>'):'';
     app.innerHTML = statusBar()+'<div class="content" id="content">'+screenHTML()+'</div>'+tabbar()+modal+toastHTML;
@@ -989,11 +848,11 @@
 
   // ---------------- actions ----------------
   function openAdd(){ var a0=state.accounts[0].id, a1=(state.accounts[1]||state.accounts[0]).id;
-    draft={type:'expense',amount:'',categoryId:(catList('expense')[0]||{id:'other'}).id,accountId:a0,toAccountId:a1,fxCur:null,fxSym:null,fxRate:1,paidBy:(conn&&conn.memberId)||null,shared:true,note:'',date:iso(new Date())}; ui.modal='add'; render(); }
+    draft={type:'expense',amount:'',categoryId:(catList('expense')[0]||{id:'other'}).id,accountId:a0,toAccountId:a1,fxCur:null,fxSym:null,fxRate:1,note:'',date:iso(new Date())}; ui.modal='add'; render(); }
   function openEdit(id){ var t=state.transactions.find(function(x){return x.id===id;}); if(!t)return;
     draft={id:t.id,type:t.type,amount:String(t.fx?t.fx.amount:t.amount),fxCur:t.fx?t.fx.cur:null,fxSym:t.fx?t.fx.sym:null,fxRate:t.fx?t.fx.rate:1,categoryId:t.categoryId||(catList(t.type==='income'?'income':'expense')[0]||{id:'other'}).id,
       accountId:t.accountId||state.accounts[0].id,toAccountId:t.toAccountId||(state.accounts[1]||state.accounts[0]).id,
-      splits:t.splits?t.splits.map(function(s){return {categoryId:s.categoryId,amount:s.amount};}):null,tags:t.tags?t.tags.slice():null,paidBy:t.paidBy||t.by||null,shared:t.shared!==false,note:t.note,date:t.date,createdAt:t.createdAt}; ui.modal='edit'; render(); }
+      splits:t.splits?t.splits.map(function(s){return {categoryId:s.categoryId,amount:s.amount};}):null,tags:t.tags?t.tags.slice():null,note:t.note,date:t.date,createdAt:t.createdAt}; ui.modal='edit'; render(); }
   function closeModal(){ ui.modal=null; draft=null; render(); }
   function commitAmountKey(k){
     var v=draft.amount;
@@ -1022,9 +881,8 @@
       if(foreign) rec.fx={cur:draft.fxCur,sym:draft.fxSym,amount:amt,rate:draft.fxRate};
     }
     if(tags.length) rec.tags=tags;
-    if(rec.type==='expense' && Object.keys(state.members||{}).length>=2){ rec.paidBy=draft.paidBy||(conn&&conn.memberId); if(draft.shared===false)rec.shared=false; }
-    if(ui.modal==='edit'){ var idx=state.transactions.findIndex(function(x){return x.id===draft.id;}); if(idx>=0){ rec.id=draft.id; rec.createdAt=draft.createdAt; if(state.transactions[idx].by)rec.by=state.transactions[idx].by; state.transactions[idx]=rec; } }
-    else { rec.id=uid(); rec.createdAt=Date.now(); if(conn&&conn.memberId)rec.by=conn.memberId; state.transactions.unshift(rec); }
+    if(ui.modal==='edit'){ var idx=state.transactions.findIndex(function(x){return x.id===draft.id;}); if(idx>=0){ rec.id=draft.id; rec.createdAt=draft.createdAt; state.transactions[idx]=rec; } }
+    else { rec.id=uid(); rec.createdAt=Date.now(); state.transactions.unshift(rec); }
     sortT(); save(); var wasEdit=ui.modal==='edit'; ui.modal=null; draft=null; render(); toast(wasEdit?'Saved':(rec.type==='transfer'?'Transferred':'Added '+money(amt)));
   }
   function deleteTxn(){ if(!draft)return; undoTxn=state.transactions.find(function(x){return x.id===draft.id;})||null; state.transactions=state.transactions.filter(function(x){return x.id!==draft.id;}); save(); ui.modal=null; draft=null; render(); toast('Transaction deleted', true); }
@@ -1033,15 +891,6 @@
     var el=e.target.closest('[data-act]'); if(!el)return;
     var act=el.getAttribute('data-act'), a=el.getAttribute('data-a');
     switch(act){
-      case 'fbconnect': { var cfgEl=document.querySelector('[data-inp="fbconfig"]'); var cfg=parseConfig(cfgEl?cfgEl.value:''); if(!cfg){ ui.connectErr='Could not read that config. Paste the whole firebaseConfig object (with apiKey and projectId).'; render(); break; } conn={config:cfg}; saveConn(); ui.connectErr=null; try{ initFirebase(cfg); }catch(e){ ui.connectErr=e.message; render(); break; } ui.connect='loading'; render(); fauth.signInAnonymously().then(function(){ ui.connect='household'; ui.connectErr=null; render(); }).catch(function(err){ ui.connectErr='Sign-in failed: '+err.message+'. Enable Anonymous sign-in in Firebase → Authentication.'; ui.connect='error'; render(); }); break; }
-      case 'hhtab': ui.hhTab=a; ui.connectErr=null; render(); break;
-      case 'hhcreate': { var hn=document.querySelector('[data-inp="hhname"]'), mn=document.querySelector('[data-inp="myname-create"]'), myn=mn?mn.value.trim():''; if(!myn){ ui.connectErr='Please enter your name.'; render(); break; } createHousehold(hn?hn.value.trim():'', myn); break; }
-      case 'hhjoin': { var cc=document.querySelector('[data-inp="hhcode"]'), mj=document.querySelector('[data-inp="myname-join"]'), myn2=mj?mj.value.trim():''; if(!myn2){ ui.connectErr='Please enter your name.'; render(); break; } joinHousehold(cc?cc.value:'', myn2); break; }
-      case 'reconfig': { if(unsub){unsub();unsub=null;} connected=false; state=null; conn=conn||{}; conn.hid=null; conn.memberId=null; saveConn(); ui.connectErr=null; ui.connect='config'; render(); break; }
-      case 'retryboot': ui.connectErr=null; boot(); break;
-      case 'backhh': ui.connect='household'; ui.connectErr=null; render(); break;
-      case 'leavehh': { if(confirm('Leave this household on this device? The shared data stays safe for everyone else.')){ leaveHousehold(); } break; }
-      case 'hhcopy': { var code=conn&&conn.hid?fmtCode(conn.hid):''; if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(function(){toast('Code copied');},function(){toast(code);}); } else toast(code); break; }
       case 'tab': ui.tab=a; ui.q=ui.q; render(); break;
       case 'add': openAdd(); break;
       case 'edit': openEdit(a); break;
@@ -1059,7 +908,6 @@
         else if(ui.modal==='goals'){ ui.modal=ui.mgrReturn||null; render(); }
         else if(ui.modal==='split'){ ui.modal=ui.splitReturn||'add'; render(); }
         else if(ui.modal==='fxpick'){ ui.modal=ui.fxReturn||'add'; render(); }
-        else if(ui.modal==='settle'){ ui.modal=null; render(); }
         else closeModal();
         break;
       case 'cancelpin': ui.pinScreen=false; pinBuf=''; pinMode='unlock'; ui.pinErr=false; render(); break;
@@ -1177,12 +1025,6 @@
       case 'delete': deleteTxn(); break;
       case 'pickcat': draft.categoryId=a; document.getElementById('catrow').innerHTML=catrowHTML(); break;
       case 'pickacc': draft.accountId=a; document.getElementById('accrow').innerHTML=accRowHTML(a,'pickacc'); break;
-      case 'pickpaid': draft.paidBy=a; document.getElementById('paidrow').innerHTML=memberChips(a,'pickpaid'); break;
-      case 'togshared': { captureForm(); draft.shared=!(draft.shared!==false); render(); break; }
-      case 'opensettle': ui.modal='settle'; render(); break;
-      case 'settle': { var sb=settleBalance(); if(sb.net===0){ toast('Already settled'); break; } var s2={id:'s'+uid(),date:iso(new Date()),by:conn&&conn.memberId};
-        if(sb.net>0){ s2.from=sb.other; s2.to=sb.me; s2.amount=sb.net; } else { s2.from=sb.me; s2.to=sb.other; s2.amount=-sb.net; }
-        if(!state.settlements)state.settlements=[]; state.settlements.push(s2); save(); ui.modal=null; render(); toast('Settled up'); break; }
       case 'pickfrom': draft.accountId=a; document.getElementById('fromrow').innerHTML=accRowHTML(a,'pickfrom'); break;
       case 'pickto': draft.toAccountId=a; document.getElementById('torow').innerHTML=accRowHTML(a,'pickto'); break;
       case 'dtype': if(draft.type!==a){ captureForm(); draft.type=a;
@@ -1199,7 +1041,7 @@
       case 'budremove': delete state.budgets[a]; save(); ui.modal=null; render(); toast('Budget removed'); break;
       case 'cur': { var parts=a.split('|'); state.settings.cur=parts[0]; state.settings.sym=parts[1]; save(); render(); break; }
       case 'loadsample': { seed().forEach(function(t){ state.transactions.push(t); }); sortT(); save(); ui.modal=null; render(); toast('Sample data added'); break; }
-      case 'reset': { if(confirm('Clear ALL shared data (transactions, budgets, categories) for everyone in this household? This cannot be undone.')){ var kept={members:state.members,household:state.household,ownerId:state.ownerId}; state=fresh(false); state.members=kept.members; state.household=kept.household; state.ownerId=kept.ownerId; rebuildCat(); save(); ui.modal=null; ui.tab='home'; render(); toast('Household reset'); } break; }
+      case 'reset': { if(confirm('Delete all transactions, budgets and custom categories? This cannot be undone.')){ state=fresh(false); rebuildCat(); save(); ui.modal=null; ui.tab='home'; render(); toast('Reset complete'); } break; }
     }
   });
   document.addEventListener('input',function(e){
@@ -1216,8 +1058,6 @@
   document.addEventListener('click',function(e){ if(e.target.closest('[data-stop]')&&!e.target.closest('[data-act]')){ e.stopPropagation(); } },true);
   if(window.matchMedia){ try{ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){ if(state.settings.theme==='system')render(); }); }catch(_){} }
 
-  boot();
+  load(); render();
 })();
 </script>
-</body>
-</html>
