@@ -85,7 +85,7 @@ export default function HomeScreen() {
             ...(!theme.isDark ? theme.shadow('sm') : {}),
           }}
         >
-          <Ionicons name="person-outline" size={22} color={theme.colors.text} />
+          <Ionicons name="settings-outline" size={22} color={theme.colors.text} />
         </Pressable>
       </View>
 
