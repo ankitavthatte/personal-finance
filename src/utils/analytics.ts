@@ -156,13 +156,3 @@ export function trailingMonths(
   }
   return out;
 }
-
-/** Average daily spend so far this month, used for pace projection. */
-export function projectedMonthSpend(txns: Transaction[], key: MonthKey, base = new Date()): number {
-  const { expense } = summarizeMonth(txns, key);
-  const isCurrent = key.year === base.getFullYear() && key.month === base.getMonth();
-  const totalDays = new Date(key.year, key.month + 1, 0).getDate();
-  const elapsed = isCurrent ? base.getDate() : totalDays;
-  if (elapsed <= 0) return expense;
-  return (expense / elapsed) * totalDays;
-}

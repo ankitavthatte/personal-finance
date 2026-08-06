@@ -18,7 +18,6 @@ import { useTheme } from '@/theme';
 import {
   currentMonthKey,
   dailyExpenseSeries,
-  projectedMonthSpend,
   spendByCategory,
   summarizeMonth,
 } from '@/utils/analytics';
@@ -43,10 +42,6 @@ export default function HomeScreen() {
   const freeToSpend = Math.max(budget - spent, 0);
   const budgetRatio = budget > 0 ? spent / budget : 0;
   const overBudget = spent > budget && budget > 0;
-  const projected = useMemo(
-    () => projectedMonthSpend(transactions, monthKey),
-    [transactions, monthKey],
-  );
 
   // Weekly buckets of the daily series for a clean 4/5-bar mini chart.
   const weeklyBars = useMemo(() => {
@@ -100,26 +95,6 @@ export default function HomeScreen() {
           <Text variant="callout" color="textSecondary">
             {overBudget ? 'Over budget by' : 'Free to spend'}
           </Text>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-              backgroundColor: theme.colors.surfaceSunken,
-              paddingHorizontal: 10,
-              paddingVertical: 5,
-              borderRadius: theme.radius.full,
-            }}
-          >
-            <Ionicons
-              name={projected > budget ? 'trending-up' : 'trending-down'}
-              size={14}
-              color={projected > budget ? theme.colors.negative : theme.colors.positive}
-            />
-            <Text variant="caption" color="textSecondary">
-              {formatMoney(projected, sym, { decimals: false })} projected
-            </Text>
-          </View>
         </View>
 
         <Text

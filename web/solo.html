@@ -394,7 +394,6 @@
   function dailySeries(k){ var dim=new Date(k.y,k.m+1,0).getDate(), arr=new Array(dim).fill(0);
     state.transactions.forEach(function(t){ if(t.type!=='expense'||!inMonth(t.date,k.y,k.m))return; arr[parseISO(t.date).getDate()-1]+=t.amount; }); return arr; }
   function trailing(n){ var out=[],b=new Date(); for(var i=n-1;i>=0;i--){ var d=new Date(b.getFullYear(),b.getMonth()-i,1),k={y:d.getFullYear(),m:d.getMonth()},s=summary(k); out.push({label:MS[d.getMonth()],exp:s.exp,inc:s.inc,cur:i===0}); } return out; }
-  function projected(k){ var s=summary(k), now=new Date(), isCur=k.y===now.getFullYear()&&k.m===now.getMonth(), tot=new Date(k.y,k.m+1,0).getDate(), el=isCur?now.getDate():tot; return el<=0?s.exp:(s.exp/el)*tot; }
 
   // ---------------- render pieces ----------------
   function chip(cat,solid,sz){ var bg=solid?cat.color:hexA(cat.color,0.15), fg=solid?'#fff':cat.color; return '<div class="chipico '+(sz||'')+'" style="background:'+bg+';color:'+fg+'">'+ic(cat.icon)+'</div>'; }
@@ -419,11 +418,9 @@
 
   function homeScreen(){
     var k=monthKey(0), s=summary(k), tops=byCat(k,'expense').slice(0,4), recent=state.transactions.slice(0,5);
-    var budget=state.settings.monthlyBudget, spent=s.exp, free=Math.max(budget-spent,0), over=spent>budget&&budget>0, proj=projected(k);
+    var budget=state.settings.monthlyBudget, spent=s.exp, free=Math.max(budget-spent,0), over=spent>budget&&budget>0;
     var elapsed=new Date().getDate(), totalDays=new Date(k.y,k.m+1,0).getDate();
-    var pill = elapsed>=6
-      ? '<span class="pill">'+ic(proj>budget?'trendUp':'arrDown')+' '+money(proj)+' projected</span>'
-      : '<span class="pill">'+ic('cal')+' Day '+elapsed+' of '+totalDays+'</span>';
+    var pill = '<span class="pill">'+ic('cal')+' Day '+elapsed+' of '+totalDays+'</span>';
     var remDays=Math.max(totalDays-elapsed+1,1), safe=Math.round(Math.max(budget-spent,0)/remDays);
     var w=weekly(k), wmax=Math.max.apply(null,w.concat([1]));
     var hour=new Date().getHours(), greet=hour<12?'Good morning':hour<17?'Good afternoon':'Good evening';
