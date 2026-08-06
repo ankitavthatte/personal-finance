@@ -21,7 +21,7 @@ import {
   spendByCategory,
   summarizeMonth,
 } from '@/utils/analytics';
-import { formatMoney, monthName } from '@/utils/format';
+import { formatMoney, todayLabel } from '@/utils/format';
 
 export default function HomeScreen() {
   const theme = useTheme();
@@ -68,7 +68,7 @@ export default function HomeScreen() {
           <Text variant="footnote" color="textSecondary">
             {greeting()}, {settings.name}
           </Text>
-          <Text variant="title">{monthName(monthKey.month)}</Text>
+          <Text variant="title">{todayLabel()}</Text>
         </View>
         <Pressable
           onPress={() => router.push('/settings')}

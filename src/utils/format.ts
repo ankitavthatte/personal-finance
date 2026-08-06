@@ -41,6 +41,18 @@ export function monthName(monthIndex: number, short = false): string {
   return (short ? MONTHS_SHORT : MONTHS)[monthIndex];
 }
 
+/** Ordinal suffix for a day of month, e.g. 1 -> "1st", 6 -> "6th". */
+export function ordinal(n: number): string {
+  const v = n % 100;
+  const suffixes = ['th', 'st', 'nd', 'rd'];
+  return `${n}${suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]}`;
+}
+
+/** Today's date as a human label, e.g. "6th August". Recomputes each call. */
+export function todayLabel(date: Date = new Date()): string {
+  return `${ordinal(date.getDate())} ${MONTHS[date.getMonth()]}`;
+}
+
 /** Human date, e.g. "Today", "Yesterday", or "Mon, 4 Aug". */
 export function friendlyDate(iso: string): string {
   const d = parseISO(iso);
