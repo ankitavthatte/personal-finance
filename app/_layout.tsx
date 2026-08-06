@@ -54,6 +54,8 @@ function Navigator() {
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="transaction/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="recurring" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="recurring-edit" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );

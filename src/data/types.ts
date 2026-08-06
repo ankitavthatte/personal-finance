@@ -23,6 +23,29 @@ export interface Transaction {
   /** ISO date string (yyyy-mm-dd) of when the money moved. */
   date: string;
   createdAt: number;
+  /** Set when this transaction was auto-posted from a recurring rule. */
+  recurringId?: string;
+}
+
+/** How often a recurring rule repeats. */
+export type RecurrenceFrequency = 'weekly' | 'monthly';
+
+/**
+ * A rule that automatically posts a transaction on its due date. On every app
+ * launch, any occurrence whose `nextDate` is due (today or earlier) is posted
+ * and the rule advances to the following period.
+ */
+export interface RecurringRule {
+  id: string;
+  type: TransactionType;
+  /** Always a positive number; sign is derived from `type`. */
+  amount: number;
+  categoryId: string;
+  note: string;
+  frequency: RecurrenceFrequency;
+  /** ISO date (yyyy-mm-dd) of the next occurrence still to be posted. */
+  nextDate: string;
+  createdAt: number;
 }
 
 /** Monthly budget cap for a single expense category. */

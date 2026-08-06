@@ -11,3 +11,4 @@ export * from './BarChart';
 export * from './TransactionRow';
 export * from './Keypad';
 export * from './TransactionForm';
+export * from './RecurringForm';

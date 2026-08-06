@@ -7,8 +7,8 @@ import React, {
   useMemo,
   useReducer,
 } from 'react';
-import { Budget, Settings, Transaction } from '@/data/types';
-import { makeId } from '@/utils/format';
+import { Budget, RecurringRule, Settings, Transaction } from '@/data/types';
+import { advanceRecurrence, makeId, toISODate } from '@/utils/format';
 import {
   DEFAULT_BUDGETS,
   DEFAULT_SETTINGS,
@@ -20,6 +20,7 @@ const STORAGE_KEY = 'pennywise.state.v1';
 interface PersistedState {
   transactions: Transaction[];
   budgets: Budget[];
+  recurring: RecurringRule[];
   settings: Settings;
   onboarded: boolean;
 }
@@ -31,6 +32,7 @@ interface State extends PersistedState {
 const initialState: State = {
   transactions: [],
   budgets: DEFAULT_BUDGETS,
+  recurring: [],
   settings: DEFAULT_SETTINGS,
   onboarded: false,
   hydrated: false,
@@ -42,6 +44,10 @@ type Action =
   | { type: 'UPDATE_TXN'; payload: Transaction }
   | { type: 'DELETE_TXN'; payload: string }
   | { type: 'SET_BUDGET'; payload: Budget }
+  | { type: 'ADD_RECURRING'; payload: RecurringRule }
+  | { type: 'UPDATE_RECURRING'; payload: RecurringRule }
+  | { type: 'DELETE_RECURRING'; payload: string }
+  | { type: 'APPLY_RECURRING'; payload: { transactions: Transaction[]; recurring: RecurringRule[] } }
   | { type: 'SET_SETTINGS'; payload: Partial<Settings> }
   | { type: 'COMPLETE_ONBOARDING'; payload: Partial<Settings> }
   | { type: 'RESET' };
@@ -51,6 +57,51 @@ function sortTxns(txns: Transaction[]): Transaction[] {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     return b.createdAt - a.createdAt;
   });
+}
+
+/**
+ * Given the recurring rules and existing transactions, compute any occurrences
+ * that are now due (nextDate on or before `today`) and the rules advanced past
+ * them. Returns `null` when nothing is due, so callers can skip a dispatch.
+ * Kept pure so it can run inside an effect without surprising re-renders.
+ */
+function computeDueRecurring(
+  rules: RecurringRule[],
+  transactions: Transaction[],
+  today: string,
+): { transactions: Transaction[]; recurring: RecurringRule[] } | null {
+  const posted: Transaction[] = [];
+  let changed = false;
+
+  const nextRules = rules.map((rule) => {
+    let next = rule.nextDate;
+    let guard = 0;
+    // Post every missed period up to today (guard bounds pathological loops).
+    while (next <= today && guard < 400) {
+      guard += 1;
+      const already =
+        transactions.some((t) => t.recurringId === rule.id && t.date === next) ||
+        posted.some((t) => t.recurringId === rule.id && t.date === next);
+      if (!already) {
+        posted.push({
+          id: makeId(),
+          type: rule.type,
+          amount: rule.amount,
+          categoryId: rule.categoryId,
+          note: rule.note,
+          date: next,
+          createdAt: Date.now(),
+          recurringId: rule.id,
+        });
+      }
+      next = advanceRecurrence(next, rule.frequency);
+      changed = true;
+    }
+    return next === rule.nextDate ? rule : { ...rule, nextDate: next };
+  });
+
+  if (!changed && posted.length === 0) return null;
+  return { transactions: posted, recurring: nextRules };
 }
 
 function reducer(state: State, action: Action): State {
@@ -76,6 +127,23 @@ function reducer(state: State, action: Action): State {
       const next = action.payload.amount > 0 ? [...others, action.payload] : others;
       return { ...state, budgets: next };
     }
+    case 'ADD_RECURRING':
+      return { ...state, recurring: [...state.recurring, action.payload] };
+    case 'UPDATE_RECURRING':
+      return {
+        ...state,
+        recurring: state.recurring.map((r) => (r.id === action.payload.id ? action.payload : r)),
+      };
+    case 'DELETE_RECURRING':
+      return { ...state, recurring: state.recurring.filter((r) => r.id !== action.payload) };
+    case 'APPLY_RECURRING':
+      return {
+        ...state,
+        transactions: action.payload.transactions.length
+          ? sortTxns([...action.payload.transactions, ...state.transactions])
+          : state.transactions,
+        recurring: action.payload.recurring,
+      };
     case 'SET_SETTINGS':
       return { ...state, settings: { ...state.settings, ...action.payload } };
     case 'COMPLETE_ONBOARDING':
@@ -96,6 +164,9 @@ export interface FinanceContextValue extends State {
   updateTransaction: (txn: Transaction) => void;
   deleteTransaction: (id: string) => void;
   setBudget: (categoryId: string, amount: number) => void;
+  addRecurring: (input: Omit<RecurringRule, 'id' | 'createdAt'>) => RecurringRule;
+  updateRecurring: (rule: RecurringRule) => void;
+  deleteRecurring: (id: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   completeOnboarding: (patch: Partial<Settings>) => void;
   loadSampleData: () => void;
@@ -119,6 +190,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             payload: {
               transactions: sortTxns(parsed.transactions ?? []),
               budgets: parsed.budgets ?? DEFAULT_BUDGETS,
+              recurring: parsed.recurring ?? [],
               settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
               onboarded: parsed.onboarded ?? false,
             },
@@ -129,6 +201,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             payload: {
               transactions: [],
               budgets: DEFAULT_BUDGETS,
+              recurring: [],
               settings: DEFAULT_SETTINGS,
               onboarded: false,
             },
@@ -140,6 +213,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           payload: {
             transactions: [],
             budgets: DEFAULT_BUDGETS,
+            recurring: [],
             settings: DEFAULT_SETTINGS,
             onboarded: false,
           },
@@ -148,17 +222,35 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  // Once hydrated, post any recurring occurrences that came due while the app
+  // was closed. Runs a single pass on launch.
+  useEffect(() => {
+    if (!state.hydrated) return;
+    const result = computeDueRecurring(state.recurring, state.transactions, toISODate(new Date()));
+    if (result) dispatch({ type: 'APPLY_RECURRING', payload: result });
+    // Intentionally only depends on hydration — this is a launch-time catch-up.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.hydrated]);
+
   // Persist whenever the meaningful slices change.
   useEffect(() => {
     if (!state.hydrated) return;
     const payload: PersistedState = {
       transactions: state.transactions,
       budgets: state.budgets,
+      recurring: state.recurring,
       settings: state.settings,
       onboarded: state.onboarded,
     };
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload)).catch(() => {});
-  }, [state.transactions, state.budgets, state.settings, state.onboarded, state.hydrated]);
+  }, [
+    state.transactions,
+    state.budgets,
+    state.recurring,
+    state.settings,
+    state.onboarded,
+    state.hydrated,
+  ]);
 
   const addTransaction = useCallback((input: Omit<Transaction, 'id' | 'createdAt'>) => {
     const txn: Transaction = { ...input, id: makeId(), createdAt: Date.now() };
@@ -176,6 +268,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const setBudget = useCallback((categoryId: string, amount: number) => {
     dispatch({ type: 'SET_BUDGET', payload: { categoryId, amount } });
+  }, []);
+
+  const addRecurring = useCallback((input: Omit<RecurringRule, 'id' | 'createdAt'>) => {
+    const rule: RecurringRule = { ...input, id: makeId(), createdAt: Date.now() };
+    dispatch({ type: 'ADD_RECURRING', payload: rule });
+    return rule;
+  }, []);
+
+  const updateRecurring = useCallback((rule: RecurringRule) => {
+    dispatch({ type: 'UPDATE_RECURRING', payload: rule });
+  }, []);
+
+  const deleteRecurring = useCallback((id: string) => {
+    dispatch({ type: 'DELETE_RECURRING', payload: id });
   }, []);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
@@ -202,6 +308,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       updateTransaction,
       deleteTransaction,
       setBudget,
+      addRecurring,
+      updateRecurring,
+      deleteRecurring,
       updateSettings,
       completeOnboarding,
       loadSampleData,
@@ -213,6 +322,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       updateTransaction,
       deleteTransaction,
       setBudget,
+      addRecurring,
+      updateRecurring,
+      deleteRecurring,
       updateSettings,
       completeOnboarding,
       loadSampleData,

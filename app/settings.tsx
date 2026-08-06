@@ -22,7 +22,8 @@ const CURRENCIES = [
 export default function SettingsScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { settings, updateSettings, loadSampleData, resetAll, transactions } = useFinance();
+  const { settings, updateSettings, loadSampleData, resetAll, transactions, recurring } =
+    useFinance();
 
   const [name, setName] = useState(settings.name === 'there' ? '' : settings.name);
   const [budget, setBudget] = useState(String(settings.monthlyBudget));
@@ -110,7 +111,7 @@ export default function SettingsScreen() {
               </View>
             </Row>
           </Pressable>
-          <Row icon="flag-outline" label="Monthly budget">
+          <Row icon="flag-outline" label="Monthly budget" divider>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text variant="body" color="textSecondary">
                 {settings.currencySymbol}
@@ -125,6 +126,18 @@ export default function SettingsScreen() {
               />
             </View>
           </Row>
+          <Pressable onPress={() => router.push('/recurring')}>
+            <Row icon="repeat" label="Recurring">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {recurring.length > 0 && (
+                  <Text variant="body" color="textSecondary">
+                    {recurring.length}
+                  </Text>
+                )}
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+              </View>
+            </Row>
+          </Pressable>
         </Card>
 
         {/* Data */}

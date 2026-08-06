@@ -88,6 +88,14 @@ export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+/** Advance an ISO date by one recurrence period. */
+export function advanceRecurrence(iso: string, frequency: 'weekly' | 'monthly'): string {
+  const d = parseISO(iso);
+  if (frequency === 'weekly') d.setDate(d.getDate() + 7);
+  else d.setMonth(d.getMonth() + 1);
+  return toISODate(d);
+}
+
 export function daysShort(dayIndex: number): string {
   return DAYS_SHORT[dayIndex];
 }
