@@ -289,6 +289,8 @@
   var MS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var DS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var ordinal=function(n){ var v=n%100; return n+(['th','st','nd','rd'][(v-20)%10]||['th','st','nd','rd'][v]||'th'); };
+  var todayLabel=function(){ var d=new Date(); return ordinal(d.getDate())+' '+MONTHS[d.getMonth()]; };
   var friendly=function(s){ var d=parseISO(s), t=sod(new Date()); var diff=Math.round((sod(d)-t)/864e5);
     if(diff===0)return 'Today'; if(diff===-1)return 'Yesterday'; if(diff===1)return 'Tomorrow';
     return DS[d.getDay()]+', '+d.getDate()+' '+MS[d.getMonth()]; };
@@ -424,7 +426,7 @@
     var remDays=Math.max(totalDays-elapsed+1,1), safe=Math.round(Math.max(budget-spent,0)/remDays);
     var w=weekly(k), wmax=Math.max.apply(null,w.concat([1]));
     var hour=new Date().getHours(), greet=hour<12?'Good morning':hour<17?'Good afternoon':'Good evening';
-    var h='<div class="row between" style="padding:6px 2px 14px"><div><div class="sub">'+greet+', '+state.settings.name+'</div><div class="title">'+MONTHS[k.m]+'</div></div>'+
+    var h='<div class="row between" style="padding:6px 2px 14px"><div><div class="sub">'+greet+', '+state.settings.name+'</div><div class="title">'+todayLabel()+'</div></div>'+
       '<div class="row" style="gap:8px"><div class="iconbtn" data-act="theme">'+ic(isDark()?'sun':'moon')+'</div><div class="iconbtn" data-act="settings">'+ic('cog')+'</div></div></div>';
     h+='<div class="card"><div class="row between"><span class="sub">'+(over?'Over budget by':'Free to spend')+'</span>'+
       pill+'</div>'+
