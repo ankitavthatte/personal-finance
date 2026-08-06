@@ -611,6 +611,15 @@
     var mlist=Object.keys(merch).map(function(n){return {name:n,total:merch[n]};}).sort(function(a,b){return b.total-a.total;}).slice(0,5);
     if(mlist.length>1){ h+='<div class="card mt" style="padding:14px 16px 6px"><div class="h" style="margin-bottom:2px">Top '+(type==='expense'?'merchants':'sources')+'</div>'+
       mlist.map(function(m){ return '<div class="lrow" style="cursor:default"><div class="grow"><div class="nm">'+escapeHtml(m.name)+'</div></div><div class="amt tnum">'+money(m.total)+'</div></div>'; }).join('')+'</div>'; }
+    // Per-person monthly summary (household, expense)
+    if(type==='expense' && Object.keys(state.members||{}).length>=2){
+      var byP={}; state.transactions.forEach(function(t){ if(t.type!=='expense'||!inMonth(t.date,k.y,k.m))return; var pp=t.paidBy||t.by; if(!pp||!state.members[pp])return; byP[pp]=(byP[pp]||0)+t.amount; });
+      var pids=Object.keys(state.members), maxP=Math.max.apply(null,pids.map(function(id){return byP[id]||0;}).concat([1])), totP=pids.reduce(function(a,id){return a+(byP[id]||0);},0);
+      h+='<div class="card mt"><div class="h">By person</div><div class="tiny" style="margin:2px 0 12px">Who paid this month</div>'+
+        pids.sort(function(a,b){return (byP[b]||0)-(byP[a]||0);}).map(function(id,i){ var m=state.members[id], amt=byP[id]||0, pct=maxP>0?amt/maxP:0;
+          return '<div style="'+(i===0?'':'border-top:1px solid var(--s-divider);')+'padding:10px 0"><div class="row between" style="margin-bottom:7px"><div class="row" style="gap:10px"><div style="width:26px;height:26px;border-radius:13px;background:'+m.color+';display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px">'+escapeHtml((m.name||'?').slice(0,1).toUpperCase())+'</div><span style="font-weight:650">'+escapeHtml(m.name)+(id===(conn&&conn.memberId)?' (you)':'')+'</span></div><span class="tnum" style="font-weight:800">'+money(amt)+'</span></div><div class="track sm"><i style="width:'+(pct*100)+'%;background:'+m.color+'"></i></div></div>'; }).join('')+
+        (totP>0?'<div class="row between" style="border-top:1px solid var(--s-divider);padding-top:11px;margin-top:2px"><span class="sub">Total paid</span><span class="tnum" style="font-weight:800">'+money(totP)+'</span></div>':'')+'</div>';
+    }
     // Spending calendar heatmap (expense only)
     if(type==='expense'){ var ds=dailySeries(k), dmax=Math.max.apply(null,ds.concat([1])), firstDow=new Date(k.y,k.m,1).getDay(), cells='';
       for(var b=0;b<firstDow;b++) cells+='<div></div>';
