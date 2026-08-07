@@ -1,0 +1,57 @@
+name: EAS Build (native app)
+
+# Builds the native Pennywise app (iOS/Android) with Expo Application Services.
+# This is the deploy path for the mobile app — GitHub Pages only serves the
+# web/ prototypes and never bundles app/ + src/.
+#
+# One-time setup before this can succeed (see EAS_SETUP.md):
+#   1. Create an Expo account and run `eas init` locally to add
+#      expo.extra.eas.projectId to app.json.
+#   2. Add an EXPO_TOKEN repository secret (Expo → Account → Access tokens).
+#
+# Runs only on demand.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        options: [android, ios, all]
+        default: android
+      profile:
+        description: Build profile
+        type: choice
+        options: [preview, production, development]
+        default: preview
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Verify EXPO_TOKEN is set
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "::error::EXPO_TOKEN secret is not set. See EAS_SETUP.md."
+            exit 1
+          fi
+
+      - name: Build
+        run: eas build --non-interactive --no-wait --platform ${{ inputs.platform }} --profile ${{ inputs.profile }}
