@@ -431,10 +431,13 @@
 
   // ---------------- recurring ----------------
   function advanceDate(isoStr,freq){ var d=parseISO(isoStr);
-    if(freq==='weekly') d.setDate(d.getDate()+7);
-    else if(freq==='daily') d.setDate(d.getDate()+1);
-    else d.setMonth(d.getMonth()+1);
-    return iso(d); }
+    if(freq==='weekly'){ d.setDate(d.getDate()+7); return iso(d); }
+    if(freq==='daily'){ d.setDate(d.getDate()+1); return iso(d); }
+    // monthly: keep the day-of-month, clamped to the target month's length so a
+    // rule on the 31st lands on Feb 28, not "Mar 3".
+    var day=d.getDate(), t=new Date(d.getFullYear(),d.getMonth()+1,1);
+    t.setDate(Math.min(day,new Date(t.getFullYear(),t.getMonth()+1,0).getDate()));
+    return iso(t); }
   // Post any recurring occurrences that are now due (on load).
   function runRecurring(){ var today=iso(new Date()), posted=0;
     (state.recurring||[]).forEach(function(r){ var guard=0;

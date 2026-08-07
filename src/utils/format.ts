@@ -91,9 +91,17 @@ export function startOfDay(d: Date): Date {
 /** Advance an ISO date by one recurrence period. */
 export function advanceRecurrence(iso: string, frequency: 'weekly' | 'monthly'): string {
   const d = parseISO(iso);
-  if (frequency === 'weekly') d.setDate(d.getDate() + 7);
-  else d.setMonth(d.getMonth() + 1);
-  return toISODate(d);
+  if (frequency === 'weekly') {
+    d.setDate(d.getDate() + 7);
+    return toISODate(d);
+  }
+  // Monthly: keep the day-of-month, clamped to the target month's length, so a
+  // rule on the 31st lands on Feb 28 rather than overflowing to "Mar 3".
+  const day = d.getDate();
+  const target = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(day, lastDay));
+  return toISODate(target);
 }
 
 export function daysShort(dayIndex: number): string {
