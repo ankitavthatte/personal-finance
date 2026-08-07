@@ -387,9 +387,10 @@
     if(!firebase.apps||!firebase.apps.length){ firebase.initializeApp(config); } fdb=firebase.firestore(); fauth=firebase.auth(); }
   function ensureMember(){ if(!state.members) state.members={}; if(!state.members[conn.memberId]){
     var used=Object.keys(state.members).length; state.members[conn.memberId]={name:conn.memberName||'Member',color:COLOR_CHOICES[used%COLOR_CHOICES.length]}; save(); } }
-  function applyDoc(data){ state=migrate(data); rebuildCat(); ensureMember();
+  function applyDoc(data){ state=migrate(data); rebuildCat(); connected=true;
+    ensureMember();
     if(state.ownerId===conn.memberId) runRecurring();
-    connected=true; ui.connect=null; ui.syncErr=null;
+    ui.connect=null; ui.syncErr=null;
     if(!ui.modal) render(); }
   function subscribe(hid){ if(unsub)unsub(); ui.connect='loading'; render();
     unsub=fdb.collection('households').doc(hid).onSnapshot(function(snap){
