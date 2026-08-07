@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/data/categories';
 import { Transaction, TransactionType } from '@/data/types';
+import { useFinance } from '@/store/FinanceStore';
 import { useTheme } from '@/theme';
 import { friendlyDate, parseISO, startOfDay, toISODate } from '@/utils/format';
 import { Button } from './Button';
@@ -45,14 +45,15 @@ export function TransactionForm({
   onDelete,
 }: Props) {
   const theme = useTheme();
+  const { categories: allCategories } = useFinance();
 
   const [type, setType] = useState<TransactionType>(initial?.type ?? 'expense');
   const [amount, setAmount] = useState<string>(
     initial?.amount ? String(initial.amount) : '',
   );
-  const categories = type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+  const categories = allCategories.filter((c) => c.type === type);
   const [categoryId, setCategoryId] = useState<string>(
-    initial?.categoryId ?? categories[0].id,
+    initial?.categoryId ?? categories[0]?.id ?? '',
   );
   const [note, setNote] = useState<string>(initial?.note ?? '');
   const [date, setDate] = useState<string>(initial?.date ?? toISODate(new Date()));
@@ -62,8 +63,8 @@ export function TransactionForm({
 
   const switchType = (next: TransactionType) => {
     setType(next);
-    const list = next === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
-    if (!list.some((c) => c.id === categoryId)) setCategoryId(list[0].id);
+    const list = allCategories.filter((c) => c.type === next);
+    if (!list.some((c) => c.id === categoryId)) setCategoryId(list[0]?.id ?? '');
   };
 
   const pressKey = (key: string) => {

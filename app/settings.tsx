@@ -142,7 +142,7 @@ export default function SettingsScreen() {
             </View>
           </Row>
           <Pressable onPress={() => router.push('/recurring')}>
-            <Row icon="repeat" label="Recurring">
+            <Row icon="repeat" label="Recurring" divider>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 {recurring.length > 0 && (
                   <Text variant="body" color="textSecondary">
@@ -151,6 +151,11 @@ export default function SettingsScreen() {
                 )}
                 <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
               </View>
+            </Row>
+          </Pressable>
+          <Pressable onPress={() => router.push('/categories')}>
+            <Row icon="pricetags-outline" label="Categories">
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
             </Row>
           </Pressable>
         </Card>

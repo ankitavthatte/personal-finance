@@ -7,7 +7,8 @@ import React, {
   useMemo,
   useReducer,
 } from 'react';
-import { Budget, RecurringRule, Settings, Transaction } from '@/data/types';
+import { DEFAULT_CATEGORIES, setCategoryRegistry } from '@/data/categories';
+import { Budget, Category, RecurringRule, Settings, Transaction } from '@/data/types';
 import { advanceRecurrence, makeId, toISODate } from '@/utils/format';
 import {
   DEFAULT_BUDGETS,
@@ -21,6 +22,7 @@ interface PersistedState {
   transactions: Transaction[];
   budgets: Budget[];
   recurring: RecurringRule[];
+  categories: Category[];
   settings: Settings;
   onboarded: boolean;
 }
@@ -33,6 +35,7 @@ const initialState: State = {
   transactions: [],
   budgets: DEFAULT_BUDGETS,
   recurring: [],
+  categories: DEFAULT_CATEGORIES,
   settings: DEFAULT_SETTINGS,
   onboarded: false,
   hydrated: false,
@@ -44,6 +47,9 @@ type Action =
   | { type: 'UPDATE_TXN'; payload: Transaction }
   | { type: 'DELETE_TXN'; payload: string }
   | { type: 'SET_BUDGET'; payload: Budget }
+  | { type: 'ADD_CATEGORY'; payload: Category }
+  | { type: 'UPDATE_CATEGORY'; payload: Category }
+  | { type: 'DELETE_CATEGORY'; payload: string }
   | { type: 'ADD_RECURRING'; payload: RecurringRule }
   | { type: 'UPDATE_RECURRING'; payload: RecurringRule }
   | { type: 'DELETE_RECURRING'; payload: string }
@@ -128,6 +134,21 @@ function reducer(state: State, action: Action): State {
       const next = action.payload.amount > 0 ? [...others, action.payload] : others;
       return { ...state, budgets: next };
     }
+    case 'ADD_CATEGORY':
+      return { ...state, categories: [...state.categories, action.payload] };
+    case 'UPDATE_CATEGORY':
+      return {
+        ...state,
+        categories: state.categories.map((c) => (c.id === action.payload.id ? action.payload : c)),
+      };
+    case 'DELETE_CATEGORY':
+      return {
+        ...state,
+        categories: state.categories.filter((c) => c.id !== action.payload),
+        // Drop any budget tied to the removed category; transactions fall back
+        // to "Uncategorized" via getCategory.
+        budgets: state.budgets.filter((b) => b.categoryId !== action.payload),
+      };
     case 'ADD_RECURRING':
       return { ...state, recurring: [...state.recurring, action.payload] };
     case 'UPDATE_RECURRING':
@@ -160,6 +181,7 @@ function reducer(state: State, action: Action): State {
         transactions: sortTxns(p.transactions ?? []),
         budgets: p.budgets ?? DEFAULT_BUDGETS,
         recurring: p.recurring ?? [],
+        categories: p.categories && p.categories.length ? p.categories : DEFAULT_CATEGORIES,
         settings: { ...DEFAULT_SETTINGS, ...p.settings },
         onboarded: p.onboarded ?? true,
       };
@@ -176,6 +198,9 @@ export interface FinanceContextValue extends State {
   updateTransaction: (txn: Transaction) => void;
   deleteTransaction: (id: string) => void;
   setBudget: (categoryId: string, amount: number) => void;
+  addCategory: (input: Omit<Category, 'id'>) => Category;
+  updateCategory: (category: Category) => void;
+  deleteCategory: (id: string) => void;
   addRecurring: (input: Omit<RecurringRule, 'id' | 'createdAt'>) => RecurringRule;
   updateRecurring: (rule: RecurringRule) => void;
   deleteRecurring: (id: string) => void;
@@ -207,6 +232,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
               transactions: sortTxns(parsed.transactions ?? []),
               budgets: parsed.budgets ?? DEFAULT_BUDGETS,
               recurring: parsed.recurring ?? [],
+              categories:
+                parsed.categories && parsed.categories.length
+                  ? parsed.categories
+                  : DEFAULT_CATEGORIES,
               settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
               onboarded: parsed.onboarded ?? false,
             },
@@ -218,6 +247,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
               transactions: [],
               budgets: DEFAULT_BUDGETS,
               recurring: [],
+              categories: DEFAULT_CATEGORIES,
               settings: DEFAULT_SETTINGS,
               onboarded: false,
             },
@@ -230,6 +260,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             transactions: [],
             budgets: DEFAULT_BUDGETS,
             recurring: [],
+            categories: DEFAULT_CATEGORIES,
             settings: DEFAULT_SETTINGS,
             onboarded: false,
           },
@@ -237,6 +268,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, []);
+
+  // Mirror the category slice into the module registry so getCategory resolves
+  // custom categories from non-reactive call sites (list rows, analytics).
+  useEffect(() => {
+    setCategoryRegistry(state.categories);
+  }, [state.categories]);
 
   // Once hydrated, post any recurring occurrences that came due while the app
   // was closed. Runs a single pass on launch.
@@ -255,6 +292,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       transactions: state.transactions,
       budgets: state.budgets,
       recurring: state.recurring,
+      categories: state.categories,
       settings: state.settings,
       onboarded: state.onboarded,
     };
@@ -263,6 +301,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     state.transactions,
     state.budgets,
     state.recurring,
+    state.categories,
     state.settings,
     state.onboarded,
     state.hydrated,
@@ -284,6 +323,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const setBudget = useCallback((categoryId: string, amount: number) => {
     dispatch({ type: 'SET_BUDGET', payload: { categoryId, amount } });
+  }, []);
+
+  const addCategory = useCallback((input: Omit<Category, 'id'>) => {
+    const category: Category = { ...input, id: makeId() };
+    dispatch({ type: 'ADD_CATEGORY', payload: category });
+    return category;
+  }, []);
+
+  const updateCategory = useCallback((category: Category) => {
+    dispatch({ type: 'UPDATE_CATEGORY', payload: category });
+  }, []);
+
+  const deleteCategory = useCallback((id: string) => {
+    dispatch({ type: 'DELETE_CATEGORY', payload: id });
   }, []);
 
   const addRecurring = useCallback((input: Omit<RecurringRule, 'id' | 'createdAt'>) => {
@@ -325,11 +378,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       transactions: state.transactions,
       budgets: state.budgets,
       recurring: state.recurring,
+      categories: state.categories,
       settings: state.settings,
       onboarded: state.onboarded,
     };
     return JSON.stringify(payload, null, 2);
-  }, [state.transactions, state.budgets, state.recurring, state.settings, state.onboarded]);
+  }, [
+    state.transactions,
+    state.budgets,
+    state.recurring,
+    state.categories,
+    state.settings,
+    state.onboarded,
+  ]);
 
   const importData = useCallback((raw: unknown): boolean => {
     if (!raw || typeof raw !== 'object') return false;
@@ -347,6 +408,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       updateTransaction,
       deleteTransaction,
       setBudget,
+      addCategory,
+      updateCategory,
+      deleteCategory,
       addRecurring,
       updateRecurring,
       deleteRecurring,
@@ -363,6 +427,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       updateTransaction,
       deleteTransaction,
       setBudget,
+      addCategory,
+      updateCategory,
+      deleteCategory,
       addRecurring,
       updateRecurring,
       deleteRecurring,

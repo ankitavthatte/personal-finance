@@ -11,7 +11,7 @@ import {
   Text,
 } from '@/components';
 import { resolveCategoryColor } from '@/components/CategoryIcon';
-import { EXPENSE_CATEGORIES, getCategory } from '@/data/categories';
+import { getCategory } from '@/data/categories';
 import { useFinance } from '@/store/FinanceStore';
 import { useTheme } from '@/theme';
 import { budgetProgress, currentMonthKey } from '@/utils/analytics';
@@ -19,7 +19,7 @@ import { formatMoney } from '@/utils/format';
 
 export default function BudgetsScreen() {
   const theme = useTheme();
-  const { transactions, budgets, settings, setBudget } = useFinance();
+  const { transactions, budgets, settings, setBudget, categories } = useFinance();
   const sym = settings.currencySymbol;
   const monthKey = useMemo(() => currentMonthKey(), []);
 
@@ -60,10 +60,13 @@ export default function BudgetsScreen() {
     setDraft('');
   };
 
-  const rows = EXPENSE_CATEGORIES.map((cat) => {
-    const p = progress.find((x) => x.categoryId === cat.id);
-    return { cat, budget: budgetMap.get(cat.id) ?? 0, prog: p };
-  }).sort((a, b) => (b.budget > 0 ? 1 : 0) - (a.budget > 0 ? 1 : 0));
+  const rows = categories
+    .filter((c) => c.type === 'expense')
+    .map((cat) => {
+      const p = progress.find((x) => x.categoryId === cat.id);
+      return { cat, budget: budgetMap.get(cat.id) ?? 0, prog: p };
+    })
+    .sort((a, b) => (b.budget > 0 ? 1 : 0) - (a.budget > 0 ? 1 : 0));
 
   const editingCat = editing ? getCategory(editing) : null;
 

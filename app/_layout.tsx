@@ -59,6 +59,8 @@ function Navigator() {
         <Stack.Screen name="recurring-edit" options={{ presentation: 'modal' }} />
         <Stack.Screen name="backup" options={{ presentation: 'modal' }} />
         <Stack.Screen name="lock" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="categories" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="category-edit" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );
