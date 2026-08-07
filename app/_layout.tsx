@@ -63,6 +63,8 @@ function Navigator() {
         <Stack.Screen name="category-edit" options={{ presentation: 'modal' }} />
         <Stack.Screen name="goals" options={{ presentation: 'modal' }} />
         <Stack.Screen name="goal-edit" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="accounts" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="account-edit" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );

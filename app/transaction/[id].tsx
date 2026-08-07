@@ -60,6 +60,7 @@ export default function EditTransactionScreen() {
             categoryId: txn.categoryId,
             note: txn.note,
             date: txn.date,
+            accountId: txn.accountId,
           }}
           onSubmit={handleSubmit}
           onCancel={() => router.back()}

@@ -1,5 +1,10 @@
-import { Budget, Settings, Transaction } from '@/data/types';
+import { Account, Budget, Settings, Transaction } from '@/data/types';
 import { makeId, toISODate } from '@/utils/format';
+
+export const DEFAULT_ACCOUNTS: Account[] = [
+  { id: 'cash', name: 'Cash', icon: 'cash', color: 'green', opening: 0 },
+  { id: 'bank', name: 'Bank Account', icon: 'business', color: 'blue', opening: 0 },
+];
 
 export const DEFAULT_SETTINGS: Settings = {
   currency: 'INR',

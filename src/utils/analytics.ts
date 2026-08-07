@@ -1,5 +1,5 @@
 import { getCategory } from '@/data/categories';
-import { Budget, Transaction } from '@/data/types';
+import { Account, Budget, Transaction } from '@/data/types';
 import { parseISO } from './format';
 
 export interface MonthKey {
@@ -119,6 +119,32 @@ export function budgetProgress(
         over: spent > b.amount,
       };
     });
+}
+
+/**
+ * Current balance of one account: its opening balance plus income minus
+ * expenses. Transactions with no accountId are attributed to `defaultAccountId`
+ * (the first account) so legacy data still counts.
+ */
+export function accountBalance(
+  account: Account,
+  transactions: Transaction[],
+  defaultAccountId: string,
+): number {
+  let balance = account.opening;
+  for (const t of transactions) {
+    const aid = t.accountId ?? defaultAccountId;
+    if (aid !== account.id) continue;
+    if (t.type === 'income') balance += t.amount;
+    else balance -= t.amount;
+  }
+  return balance;
+}
+
+/** Net worth = the sum of every account's balance. */
+export function netWorth(accounts: Account[], transactions: Transaction[]): number {
+  const defaultId = accounts[0]?.id ?? '';
+  return accounts.reduce((sum, a) => sum + accountBalance(a, transactions, defaultId), 0);
 }
 
 /** Daily expense totals across a month — used for the trend chart. */

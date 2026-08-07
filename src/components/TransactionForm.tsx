@@ -18,6 +18,7 @@ export interface TransactionDraft {
   categoryId: string;
   note: string;
   date: string;
+  accountId?: string;
 }
 
 interface Props {
@@ -45,8 +46,11 @@ export function TransactionForm({
   onDelete,
 }: Props) {
   const theme = useTheme();
-  const { categories: allCategories } = useFinance();
+  const { categories: allCategories, accounts } = useFinance();
 
+  const [accountId, setAccountId] = useState<string>(
+    initial?.accountId ?? accounts[0]?.id ?? '',
+  );
   const [type, setType] = useState<TransactionType>(initial?.type ?? 'expense');
   const [amount, setAmount] = useState<string>(
     initial?.amount ? String(initial.amount) : '',
@@ -100,7 +104,7 @@ export function TransactionForm({
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    onSubmit({ type, amount: numericAmount, categoryId, note: note.trim(), date });
+    onSubmit({ type, amount: numericAmount, categoryId, note: note.trim(), date, accountId });
   };
 
   return (
@@ -215,6 +219,49 @@ export function TransactionForm({
           );
         })}
       </ScrollView>
+
+      {/* Account picker (only when the user has more than one) */}
+      {accounts.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: theme.spacing.lg,
+            gap: theme.spacing.sm,
+            paddingTop: theme.spacing.sm,
+          }}
+        >
+          {accounts.map((a) => {
+            const selected = a.id === accountId;
+            return (
+              <Pressable
+                key={a.id}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setAccountId(a.id);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: 10,
+                  paddingRight: 14,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: selected ? theme.colors.primaryMuted : theme.colors.surfaceSunken,
+                  borderWidth: selected ? 1 : 0,
+                  borderColor: theme.colors.primary,
+                }}
+              >
+                <CategoryIcon icon={a.icon} color={a.color} size={24} solid={selected} />
+                <Text variant="footnote" color={selected ? 'primary' : 'textSecondary'}>
+                  {a.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {/* Note + date */}
       <View

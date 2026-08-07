@@ -23,7 +23,7 @@ const CURRENCIES = [
 export default function SettingsScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { settings, updateSettings, loadSampleData, resetAll, transactions, recurring, goals } =
+  const { settings, updateSettings, loadSampleData, resetAll, transactions, recurring, goals, accounts } =
     useFinance();
 
   const [name, setName] = useState(settings.name === 'there' ? '' : settings.name);
@@ -149,6 +149,16 @@ export default function SettingsScreen() {
                     {recurring.length}
                   </Text>
                 )}
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+              </View>
+            </Row>
+          </Pressable>
+          <Pressable onPress={() => router.push('/accounts')}>
+            <Row icon="wallet-outline" label="Accounts" divider>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text variant="body" color="textSecondary">
+                  {accounts.length}
+                </Text>
                 <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
               </View>
             </Row>

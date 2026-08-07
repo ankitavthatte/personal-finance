@@ -25,6 +25,18 @@ export interface Transaction {
   createdAt: number;
   /** Set when this transaction was auto-posted from a recurring rule. */
   recurringId?: string;
+  /** Account the money moved through. Undefined = the default account. */
+  accountId?: string;
+}
+
+/** A place money lives — cash, a bank account, a card, a wallet. */
+export interface Account {
+  id: string;
+  name: string;
+  icon: IconName;
+  color: CategoryColorKey;
+  /** Starting balance before any transactions are counted. */
+  opening: number;
 }
 
 /** A savings goal the user is putting money aside for. */

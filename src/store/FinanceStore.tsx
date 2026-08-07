@@ -8,9 +8,10 @@ import React, {
   useReducer,
 } from 'react';
 import { DEFAULT_CATEGORIES, setCategoryRegistry } from '@/data/categories';
-import { Budget, Category, Goal, RecurringRule, Settings, Transaction } from '@/data/types';
+import { Account, Budget, Category, Goal, RecurringRule, Settings, Transaction } from '@/data/types';
 import { advanceRecurrence, makeId, toISODate } from '@/utils/format';
 import {
+  DEFAULT_ACCOUNTS,
   DEFAULT_BUDGETS,
   DEFAULT_SETTINGS,
   generateSeedTransactions,
@@ -24,6 +25,7 @@ interface PersistedState {
   recurring: RecurringRule[];
   categories: Category[];
   goals: Goal[];
+  accounts: Account[];
   settings: Settings;
   onboarded: boolean;
 }
@@ -38,6 +40,7 @@ const initialState: State = {
   recurring: [],
   categories: DEFAULT_CATEGORIES,
   goals: [],
+  accounts: DEFAULT_ACCOUNTS,
   settings: DEFAULT_SETTINGS,
   onboarded: false,
   hydrated: false,
@@ -59,6 +62,9 @@ type Action =
   | { type: 'ADD_GOAL'; payload: Goal }
   | { type: 'UPDATE_GOAL'; payload: Goal }
   | { type: 'DELETE_GOAL'; payload: string }
+  | { type: 'ADD_ACCOUNT'; payload: Account }
+  | { type: 'UPDATE_ACCOUNT'; payload: Account }
+  | { type: 'DELETE_ACCOUNT'; payload: { id: string; reassignTo: string } }
   | { type: 'SET_SETTINGS'; payload: Partial<Settings> }
   | { type: 'COMPLETE_ONBOARDING'; payload: Partial<Settings> }
   | { type: 'REPLACE'; payload: Partial<PersistedState> }
@@ -180,6 +186,26 @@ function reducer(state: State, action: Action): State {
       };
     case 'DELETE_GOAL':
       return { ...state, goals: state.goals.filter((g) => g.id !== action.payload) };
+    case 'ADD_ACCOUNT':
+      return { ...state, accounts: [...state.accounts, action.payload] };
+    case 'UPDATE_ACCOUNT':
+      return {
+        ...state,
+        accounts: state.accounts.map((a) => (a.id === action.payload.id ? action.payload : a)),
+      };
+    case 'DELETE_ACCOUNT': {
+      const { id, reassignTo } = action.payload;
+      if (state.accounts.length <= 1) return state; // always keep one account
+      return {
+        ...state,
+        accounts: state.accounts.filter((a) => a.id !== id),
+        // Move this account's transactions (and the implicit-default ones that
+        // resolve to it) onto the chosen account so balances stay correct.
+        transactions: state.transactions.map((t) =>
+          (t.accountId ?? state.accounts[0].id) === id ? { ...t, accountId: reassignTo } : t,
+        ),
+      };
+    }
     case 'SET_SETTINGS':
       return { ...state, settings: { ...state.settings, ...action.payload } };
     case 'COMPLETE_ONBOARDING':
@@ -197,6 +223,7 @@ function reducer(state: State, action: Action): State {
         recurring: p.recurring ?? [],
         categories: p.categories && p.categories.length ? p.categories : DEFAULT_CATEGORIES,
         goals: p.goals ?? [],
+        accounts: p.accounts && p.accounts.length ? p.accounts : DEFAULT_ACCOUNTS,
         settings: { ...DEFAULT_SETTINGS, ...p.settings },
         onboarded: p.onboarded ?? true,
       };
@@ -222,6 +249,9 @@ export interface FinanceContextValue extends State {
   addGoal: (input: Omit<Goal, 'id' | 'createdAt'>) => Goal;
   updateGoal: (goal: Goal) => void;
   deleteGoal: (id: string) => void;
+  addAccount: (input: Omit<Account, 'id'>) => Account;
+  updateAccount: (account: Account) => void;
+  deleteAccount: (id: string, reassignTo: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   completeOnboarding: (patch: Partial<Settings>) => void;
   loadSampleData: () => void;
@@ -255,6 +285,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
                   ? parsed.categories
                   : DEFAULT_CATEGORIES,
               goals: parsed.goals ?? [],
+              accounts:
+                parsed.accounts && parsed.accounts.length ? parsed.accounts : DEFAULT_ACCOUNTS,
               settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
               onboarded: parsed.onboarded ?? false,
             },
@@ -268,6 +300,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
               recurring: [],
               categories: DEFAULT_CATEGORIES,
               goals: [],
+              accounts: DEFAULT_ACCOUNTS,
               settings: DEFAULT_SETTINGS,
               onboarded: false,
             },
@@ -282,6 +315,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             recurring: [],
             categories: DEFAULT_CATEGORIES,
             goals: [],
+            accounts: DEFAULT_ACCOUNTS,
             settings: DEFAULT_SETTINGS,
             onboarded: false,
           },
@@ -315,6 +349,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       recurring: state.recurring,
       categories: state.categories,
       goals: state.goals,
+      accounts: state.accounts,
       settings: state.settings,
       onboarded: state.onboarded,
     };
@@ -325,6 +360,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     state.recurring,
     state.categories,
     state.goals,
+    state.accounts,
     state.settings,
     state.onboarded,
     state.hydrated,
@@ -390,6 +426,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'DELETE_GOAL', payload: id });
   }, []);
 
+  const addAccount = useCallback((input: Omit<Account, 'id'>) => {
+    const account: Account = { ...input, id: makeId() };
+    dispatch({ type: 'ADD_ACCOUNT', payload: account });
+    return account;
+  }, []);
+
+  const updateAccount = useCallback((account: Account) => {
+    dispatch({ type: 'UPDATE_ACCOUNT', payload: account });
+  }, []);
+
+  const deleteAccount = useCallback((id: string, reassignTo: string) => {
+    dispatch({ type: 'DELETE_ACCOUNT', payload: { id, reassignTo } });
+  }, []);
+
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     dispatch({ type: 'SET_SETTINGS', payload: patch });
   }, []);
@@ -417,6 +467,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       recurring: state.recurring,
       categories: state.categories,
       goals: state.goals,
+      accounts: state.accounts,
       settings: state.settings,
       onboarded: state.onboarded,
     };
@@ -427,6 +478,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     state.recurring,
     state.categories,
     state.goals,
+    state.accounts,
     state.settings,
     state.onboarded,
   ]);
@@ -456,6 +508,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       addGoal,
       updateGoal,
       deleteGoal,
+      addAccount,
+      updateAccount,
+      deleteAccount,
       updateSettings,
       completeOnboarding,
       loadSampleData,
@@ -478,6 +533,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       addGoal,
       updateGoal,
       deleteGoal,
+      addAccount,
+      updateAccount,
+      deleteAccount,
       updateSettings,
       completeOnboarding,
       loadSampleData,
