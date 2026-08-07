@@ -13,6 +13,7 @@ import {
   TransactionRow,
 } from '@/components';
 import { resolveCategoryColor } from '@/components/CategoryIcon';
+import { getCategory } from '@/data/categories';
 import { useFinance } from '@/store/FinanceStore';
 import { useTheme } from '@/theme';
 import {
@@ -21,13 +22,18 @@ import {
   spendByCategory,
   summarizeMonth,
 } from '@/utils/analytics';
-import { formatMoney, todayLabel } from '@/utils/format';
+import { formatMoney, friendlyDate, todayLabel } from '@/utils/format';
 
 export default function HomeScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { transactions, settings } = useFinance();
+  const { transactions, settings, recurring } = useFinance();
   const sym = settings.currencySymbol;
+
+  const upcoming = useMemo(
+    () => [...recurring].sort((a, b) => (a.nextDate < b.nextDate ? -1 : 1)).slice(0, 3),
+    [recurring],
+  );
 
   const monthKey = useMemo(() => currentMonthKey(), []);
   const summary = useMemo(() => summarizeMonth(transactions, monthKey), [transactions, monthKey]);
@@ -192,6 +198,60 @@ export default function HomeScreen() {
               </Text>
             </View>
           ))}
+        </Card>
+      )}
+
+      {/* Upcoming recurring */}
+      {upcoming.length > 0 && (
+        <Card style={{ marginBottom: theme.spacing.lg }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs }}>
+            <Text variant="headline">Upcoming</Text>
+            <Pressable onPress={() => router.push('/recurring')} hitSlop={8}>
+              <Text variant="footnote" color="primary">
+                Manage
+              </Text>
+            </Pressable>
+          </View>
+          {upcoming.map((rule, i) => {
+            const category = getCategory(rule.categoryId);
+            const cadence = rule.frequency === 'weekly' ? 'Weekly' : 'Monthly';
+            return (
+              <Pressable
+                key={rule.id}
+                onPress={() => router.push({ pathname: '/recurring-edit', params: { id: rule.id } })}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 10,
+                  borderTopWidth: i === 0 ? 0 : 1,
+                  borderTopColor: theme.colors.divider,
+                }}
+              >
+                <CategoryIcon icon={category.icon} color={category.color} size={40} />
+                <View style={{ flex: 1, marginLeft: theme.spacing.md }}>
+                  <Text variant="callout" numberOfLines={1}>
+                    {rule.note || category.name}
+                  </Text>
+                  <Text variant="footnote" color="textTertiary" style={{ marginTop: 2 }}>
+                    {cadence} · next {friendlyDate(rule.nextDate)}
+                  </Text>
+                </View>
+                <Text
+                  variant="callout"
+                  style={{
+                    marginLeft: theme.spacing.md,
+                    fontVariant: ['tabular-nums'],
+                    color: rule.type === 'income' ? theme.colors.income : theme.colors.text,
+                  }}
+                >
+                  {formatMoney(rule.type === 'income' ? rule.amount : -rule.amount, sym, {
+                    decimals: false,
+                    sign: true,
+                  })}
+                </Text>
+              </Pressable>
+            );
+          })}
         </Card>
       )}
 

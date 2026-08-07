@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React from 'react';
 import { Pressable, View } from 'react-native';
@@ -39,10 +40,20 @@ export function TransactionRow({ txn, currencySymbol = '₹', onPress, showDate 
         <Text variant="headline" numberOfLines={1}>
           {txn.note || cat.name}
         </Text>
-        <Text variant="footnote" color="textTertiary" numberOfLines={1}>
-          {cat.name}
-          {showDate ? ` · ${friendlyDate(txn.date)}` : ''}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {txn.recurringId && (
+            <Ionicons
+              name="repeat"
+              size={12}
+              color={theme.colors.textTertiary}
+              style={{ marginRight: 4 }}
+            />
+          )}
+          <Text variant="footnote" color="textTertiary" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {cat.name}
+            {showDate ? ` · ${friendlyDate(txn.date)}` : ''}
+          </Text>
+        </View>
       </View>
       <Text
         variant="headline"
