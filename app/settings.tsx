@@ -23,7 +23,7 @@ const CURRENCIES = [
 export default function SettingsScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { settings, updateSettings, loadSampleData, resetAll, transactions, recurring } =
+  const { settings, updateSettings, loadSampleData, resetAll, transactions, recurring, goals } =
     useFinance();
 
   const [name, setName] = useState(settings.name === 'there' ? '' : settings.name);
@@ -154,8 +154,20 @@ export default function SettingsScreen() {
             </Row>
           </Pressable>
           <Pressable onPress={() => router.push('/categories')}>
-            <Row icon="pricetags-outline" label="Categories">
+            <Row icon="pricetags-outline" label="Categories" divider>
               <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+            </Row>
+          </Pressable>
+          <Pressable onPress={() => router.push('/goals')}>
+            <Row icon="flag-outline" label="Goals">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {goals.length > 0 && (
+                  <Text variant="body" color="textSecondary">
+                    {goals.length}
+                  </Text>
+                )}
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+              </View>
             </Row>
           </Pressable>
         </Card>

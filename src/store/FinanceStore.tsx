@@ -8,7 +8,7 @@ import React, {
   useReducer,
 } from 'react';
 import { DEFAULT_CATEGORIES, setCategoryRegistry } from '@/data/categories';
-import { Budget, Category, RecurringRule, Settings, Transaction } from '@/data/types';
+import { Budget, Category, Goal, RecurringRule, Settings, Transaction } from '@/data/types';
 import { advanceRecurrence, makeId, toISODate } from '@/utils/format';
 import {
   DEFAULT_BUDGETS,
@@ -23,6 +23,7 @@ interface PersistedState {
   budgets: Budget[];
   recurring: RecurringRule[];
   categories: Category[];
+  goals: Goal[];
   settings: Settings;
   onboarded: boolean;
 }
@@ -36,6 +37,7 @@ const initialState: State = {
   budgets: DEFAULT_BUDGETS,
   recurring: [],
   categories: DEFAULT_CATEGORIES,
+  goals: [],
   settings: DEFAULT_SETTINGS,
   onboarded: false,
   hydrated: false,
@@ -54,6 +56,9 @@ type Action =
   | { type: 'UPDATE_RECURRING'; payload: RecurringRule }
   | { type: 'DELETE_RECURRING'; payload: string }
   | { type: 'APPLY_RECURRING'; payload: { transactions: Transaction[]; recurring: RecurringRule[] } }
+  | { type: 'ADD_GOAL'; payload: Goal }
+  | { type: 'UPDATE_GOAL'; payload: Goal }
+  | { type: 'DELETE_GOAL'; payload: string }
   | { type: 'SET_SETTINGS'; payload: Partial<Settings> }
   | { type: 'COMPLETE_ONBOARDING'; payload: Partial<Settings> }
   | { type: 'REPLACE'; payload: Partial<PersistedState> }
@@ -166,6 +171,15 @@ function reducer(state: State, action: Action): State {
           : state.transactions,
         recurring: action.payload.recurring,
       };
+    case 'ADD_GOAL':
+      return { ...state, goals: [...state.goals, action.payload] };
+    case 'UPDATE_GOAL':
+      return {
+        ...state,
+        goals: state.goals.map((g) => (g.id === action.payload.id ? action.payload : g)),
+      };
+    case 'DELETE_GOAL':
+      return { ...state, goals: state.goals.filter((g) => g.id !== action.payload) };
     case 'SET_SETTINGS':
       return { ...state, settings: { ...state.settings, ...action.payload } };
     case 'COMPLETE_ONBOARDING':
@@ -182,6 +196,7 @@ function reducer(state: State, action: Action): State {
         budgets: p.budgets ?? DEFAULT_BUDGETS,
         recurring: p.recurring ?? [],
         categories: p.categories && p.categories.length ? p.categories : DEFAULT_CATEGORIES,
+        goals: p.goals ?? [],
         settings: { ...DEFAULT_SETTINGS, ...p.settings },
         onboarded: p.onboarded ?? true,
       };
@@ -204,6 +219,9 @@ export interface FinanceContextValue extends State {
   addRecurring: (input: Omit<RecurringRule, 'id' | 'createdAt'>) => RecurringRule;
   updateRecurring: (rule: RecurringRule) => void;
   deleteRecurring: (id: string) => void;
+  addGoal: (input: Omit<Goal, 'id' | 'createdAt'>) => Goal;
+  updateGoal: (goal: Goal) => void;
+  deleteGoal: (id: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   completeOnboarding: (patch: Partial<Settings>) => void;
   loadSampleData: () => void;
@@ -236,6 +254,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
                 parsed.categories && parsed.categories.length
                   ? parsed.categories
                   : DEFAULT_CATEGORIES,
+              goals: parsed.goals ?? [],
               settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
               onboarded: parsed.onboarded ?? false,
             },
@@ -248,6 +267,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
               budgets: DEFAULT_BUDGETS,
               recurring: [],
               categories: DEFAULT_CATEGORIES,
+              goals: [],
               settings: DEFAULT_SETTINGS,
               onboarded: false,
             },
@@ -261,6 +281,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             budgets: DEFAULT_BUDGETS,
             recurring: [],
             categories: DEFAULT_CATEGORIES,
+            goals: [],
             settings: DEFAULT_SETTINGS,
             onboarded: false,
           },
@@ -293,6 +314,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       budgets: state.budgets,
       recurring: state.recurring,
       categories: state.categories,
+      goals: state.goals,
       settings: state.settings,
       onboarded: state.onboarded,
     };
@@ -302,6 +324,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     state.budgets,
     state.recurring,
     state.categories,
+    state.goals,
     state.settings,
     state.onboarded,
     state.hydrated,
@@ -353,6 +376,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'DELETE_RECURRING', payload: id });
   }, []);
 
+  const addGoal = useCallback((input: Omit<Goal, 'id' | 'createdAt'>) => {
+    const goal: Goal = { ...input, id: makeId(), createdAt: Date.now() };
+    dispatch({ type: 'ADD_GOAL', payload: goal });
+    return goal;
+  }, []);
+
+  const updateGoal = useCallback((goal: Goal) => {
+    dispatch({ type: 'UPDATE_GOAL', payload: goal });
+  }, []);
+
+  const deleteGoal = useCallback((id: string) => {
+    dispatch({ type: 'DELETE_GOAL', payload: id });
+  }, []);
+
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     dispatch({ type: 'SET_SETTINGS', payload: patch });
   }, []);
@@ -379,6 +416,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       budgets: state.budgets,
       recurring: state.recurring,
       categories: state.categories,
+      goals: state.goals,
       settings: state.settings,
       onboarded: state.onboarded,
     };
@@ -388,6 +426,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     state.budgets,
     state.recurring,
     state.categories,
+    state.goals,
     state.settings,
     state.onboarded,
   ]);
@@ -414,6 +453,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       addRecurring,
       updateRecurring,
       deleteRecurring,
+      addGoal,
+      updateGoal,
+      deleteGoal,
       updateSettings,
       completeOnboarding,
       loadSampleData,
@@ -433,6 +475,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       addRecurring,
       updateRecurring,
       deleteRecurring,
+      addGoal,
+      updateGoal,
+      deleteGoal,
       updateSettings,
       completeOnboarding,
       loadSampleData,

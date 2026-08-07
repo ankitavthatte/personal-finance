@@ -27,6 +27,19 @@ export interface Transaction {
   recurringId?: string;
 }
 
+/** A savings goal the user is putting money aside for. */
+export interface Goal {
+  id: string;
+  name: string;
+  icon: IconName;
+  color: CategoryColorKey;
+  /** Amount the user is aiming to save. */
+  target: number;
+  /** Amount saved so far. */
+  saved: number;
+  createdAt: number;
+}
+
 /** How often a recurring rule repeats. */
 export type RecurrenceFrequency = 'weekly' | 'monthly';
 

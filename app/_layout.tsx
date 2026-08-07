@@ -61,6 +61,8 @@ function Navigator() {
         <Stack.Screen name="lock" options={{ presentation: 'modal' }} />
         <Stack.Screen name="categories" options={{ presentation: 'modal' }} />
         <Stack.Screen name="category-edit" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="goals" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="goal-edit" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );
