@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useColorScheme } from 'react-native';
+import { useFinance } from '@/store/FinanceStore';
 import { darkColors, lightColors, ThemeColors } from './colors';
 import { radius, shadow, spacing, typography } from './tokens';
 
@@ -16,7 +17,9 @@ const ThemeContext = createContext<Theme | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
+  const { settings } = useFinance();
+  const preference = settings.theme ?? 'system';
+  const isDark = preference === 'dark' || (preference === 'system' && scheme === 'dark');
 
   const theme = useMemo<Theme>(() => {
     const colors = isDark ? darkColors : lightColors;

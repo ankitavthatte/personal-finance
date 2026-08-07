@@ -6,6 +6,8 @@ export const DEFAULT_SETTINGS: Settings = {
   currencySymbol: '₹',
   monthlyBudget: 45000,
   name: 'there',
+  theme: 'system',
+  pin: '',
 };
 
 export const DEFAULT_BUDGETS: Budget[] = [

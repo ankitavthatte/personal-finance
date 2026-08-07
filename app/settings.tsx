@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Modal, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, Text } from '@/components';
+import { Card, SegmentedControl, Text } from '@/components';
+import { ThemePreference } from '@/data/types';
 import { useFinance } from '@/store/FinanceStore';
 import { useTheme } from '@/theme';
 
@@ -98,6 +99,20 @@ export default function SettingsScreen() {
           </Row>
         </Card>
 
+        {/* Appearance */}
+        <SectionLabel>Appearance</SectionLabel>
+        <View style={{ marginBottom: theme.spacing.xl }}>
+          <SegmentedControl<ThemePreference>
+            value={settings.theme ?? 'system'}
+            onChange={(value) => updateSettings({ theme: value })}
+            options={[
+              { label: 'System', value: 'system' },
+              { label: 'Light', value: 'light' },
+              { label: 'Dark', value: 'dark' },
+            ]}
+          />
+        </View>
+
         {/* Preferences */}
         <SectionLabel>Preferences</SectionLabel>
         <Card padded={false} style={{ marginBottom: theme.spacing.xl }}>
@@ -140,9 +155,29 @@ export default function SettingsScreen() {
           </Pressable>
         </Card>
 
+        {/* Security */}
+        <SectionLabel>Security</SectionLabel>
+        <Card padded={false} style={{ marginBottom: theme.spacing.xl }}>
+          <Pressable onPress={() => router.push('/lock')}>
+            <Row icon="lock-closed-outline" label="App lock">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text variant="body" color={settings.pin ? 'primary' : 'textSecondary'}>
+                  {settings.pin ? 'On' : 'Off'}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+              </View>
+            </Row>
+          </Pressable>
+        </Card>
+
         {/* Data */}
         <SectionLabel>Data</SectionLabel>
         <Card padded={false} style={{ marginBottom: theme.spacing.xl }}>
+          <Pressable onPress={() => router.push('/backup')}>
+            <Row icon="cloud-upload-outline" label="Backup & restore" divider>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+            </Row>
+          </Pressable>
           <Pressable onPress={confirmSample}>
             <Row icon="sparkles-outline" label="Load sample data" divider>
               <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />

@@ -54,10 +54,17 @@ export interface Budget {
   amount: number;
 }
 
+/** How the app chooses light vs dark: follow the OS, or force one. */
+export type ThemePreference = 'system' | 'light' | 'dark';
+
 export interface Settings {
   currency: string;
   currencySymbol: string;
   /** Overall monthly spending target used on the dashboard hero. */
   monthlyBudget: number;
   name: string;
+  /** Appearance preference. Defaults to following the system. */
+  theme: ThemePreference;
+  /** 4-digit app-lock PIN. Empty string means app lock is off. */
+  pin: string;
 }

@@ -50,6 +50,7 @@ type Action =
   | { type: 'APPLY_RECURRING'; payload: { transactions: Transaction[]; recurring: RecurringRule[] } }
   | { type: 'SET_SETTINGS'; payload: Partial<Settings> }
   | { type: 'COMPLETE_ONBOARDING'; payload: Partial<Settings> }
+  | { type: 'REPLACE'; payload: Partial<PersistedState> }
   | { type: 'RESET' };
 
 function sortTxns(txns: Transaction[]): Transaction[] {
@@ -152,6 +153,17 @@ function reducer(state: State, action: Action): State {
         onboarded: true,
         settings: { ...state.settings, ...action.payload },
       };
+    case 'REPLACE': {
+      const p = action.payload;
+      return {
+        ...state,
+        transactions: sortTxns(p.transactions ?? []),
+        budgets: p.budgets ?? DEFAULT_BUDGETS,
+        recurring: p.recurring ?? [],
+        settings: { ...DEFAULT_SETTINGS, ...p.settings },
+        onboarded: p.onboarded ?? true,
+      };
+    }
     case 'RESET':
       return { ...initialState, hydrated: true, onboarded: false };
     default:
@@ -171,6 +183,10 @@ export interface FinanceContextValue extends State {
   completeOnboarding: (patch: Partial<Settings>) => void;
   loadSampleData: () => void;
   resetAll: () => void;
+  /** Serialize the persisted slices to a JSON string for backup. */
+  exportData: () => string;
+  /** Replace all data from a parsed backup. Returns false if it looks invalid. */
+  importData: (raw: unknown) => boolean;
 }
 
 const FinanceContext = createContext<FinanceContextValue | null>(null);
@@ -301,6 +317,29 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'RESET' });
   }, []);
 
+  const exportData = useCallback(() => {
+    const payload = {
+      app: 'pennywise',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      transactions: state.transactions,
+      budgets: state.budgets,
+      recurring: state.recurring,
+      settings: state.settings,
+      onboarded: state.onboarded,
+    };
+    return JSON.stringify(payload, null, 2);
+  }, [state.transactions, state.budgets, state.recurring, state.settings, state.onboarded]);
+
+  const importData = useCallback((raw: unknown): boolean => {
+    if (!raw || typeof raw !== 'object') return false;
+    const data = raw as Partial<PersistedState>;
+    // A valid backup must at least carry a transactions array.
+    if (!Array.isArray(data.transactions)) return false;
+    dispatch({ type: 'REPLACE', payload: data });
+    return true;
+  }, []);
+
   const value = useMemo<FinanceContextValue>(
     () => ({
       ...state,
@@ -315,6 +354,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       completeOnboarding,
       loadSampleData,
       resetAll,
+      exportData,
+      importData,
     }),
     [
       state,
@@ -329,6 +370,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       completeOnboarding,
       loadSampleData,
       resetAll,
+      exportData,
+      importData,
     ],
   );
 

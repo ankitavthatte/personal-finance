@@ -5,6 +5,7 @@ import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { LockGate } from '@/components';
 import { FinanceProvider, useFinance } from '@/store/FinanceStore';
 import { ThemeProvider, useTheme } from '@/theme';
 
@@ -56,6 +57,8 @@ function Navigator() {
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="recurring" options={{ presentation: 'modal' }} />
         <Stack.Screen name="recurring-edit" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="backup" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="lock" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );
@@ -65,13 +68,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <FinanceProvider>
-            <Gate>
-              <Navigator />
-            </Gate>
-          </FinanceProvider>
-        </ThemeProvider>
+        <FinanceProvider>
+          <ThemeProvider>
+            <LockGate>
+              <Gate>
+                <Navigator />
+              </Gate>
+            </LockGate>
+          </ThemeProvider>
+        </FinanceProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
