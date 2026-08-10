@@ -520,11 +520,14 @@
         '<div class="amt tnum" style="color:'+(bal<0?'var(--s-neg)':'var(--s-ink)')+'">'+money(bal)+'</div></div>'; }).join('')+'</div>';
     // Upcoming recurring
     var up=(state.recurring||[]).slice().sort(function(a,b){return a.nextDate<b.nextDate?-1:1;}).filter(function(r){ return daysUntil(r.nextDate)<=45; }).slice(0,3);
-    if(up.length){ h+='<div class="card mt"><div class="row between" style="margin-bottom:4px"><div class="h">Upcoming</div><span class="sub brand" data-act="recur">Manage</span></div>'+
-      up.map(function(r,i){ var c=getCat(r.categoryId), du=daysUntil(r.nextDate), when=du<=0?'Due today':du===1?'Tomorrow':'in '+du+' days';
+    h+='<div class="card mt"><div class="row between" style="margin-bottom:4px"><div class="h">Recurring</div>'+((state.recurring&&state.recurring.length)?'<span class="sub brand" data-act="recur">Manage</span>':'')+'</div>'+
+      (up.length? up.map(function(r,i){ var c=getCat(r.categoryId), du=daysUntil(r.nextDate), when=du<=0?'Due today':du===1?'Tomorrow':'in '+du+' days';
         return '<div class="lrow" data-act="recuredit" data-a="'+r.id+'" style="'+(i===0?'border-top:none':'')+'">'+chip(c,false,'sm')+
         '<div class="grow"><div class="nm">'+escapeHtml(r.note||c.name)+'</div><div class="tiny">'+when+' · '+r.freq+'</div></div>'+
-        '<div class="amt tnum" style="color:'+(r.type==='income'?'var(--s-pos)':'var(--s-ink)')+'">'+(r.type==='income'?'+':'−')+money(r.amount).replace('−','')+'</div></div>'; }).join('')+'</div>'; }
+        '<div class="amt tnum" style="color:'+(r.type==='income'?'var(--s-pos)':'var(--s-ink)')+'">'+(r.type==='income'?'+':'−')+money(r.amount).replace('−','')+'</div></div>'; }).join('')
+       : '<div class="tiny" style="padding:6px 2px 10px">Rent, subscriptions, salary — add them once and Pennywise posts them automatically on their due date.</div>')+
+      '<div data-act="newrecur" style="display:flex;align-items:center;gap:10px;padding:10px 2px 2px;cursor:pointer;'+(up.length?'border-top:1px solid var(--s-divider);margin-top:2px':'')+'"><div class="chipico sm" style="width:32px;height:32px;background:var(--s-sunken);color:var(--s-brand)">'+ic('plus')+'</div><span class="lbl brand">Add recurring</span></div>'+
+      '</div>';
     // Savings goals
     if(state.goals&&state.goals.length){ h+='<div class="card mt"><div class="row between" style="margin-bottom:4px"><div class="h">Goals</div><span class="sub brand" data-act="goals">Manage</span></div>'+
       state.goals.map(function(g,i){ var pct=g.target>0?Math.min(g.saved/g.target,1):0; return '<div class="lrow" data-act="goaledit" data-a="'+g.id+'" style="flex-wrap:wrap;'+(i===0?'border-top:none':'')+'"><div class="row grow" style="gap:12px"><div class="chipico sm" style="background:'+hexA(g.color,0.16)+';color:'+g.color+'">'+ic(g.icon)+'</div><div class="grow"><div class="nm">'+escapeHtml(g.name)+'</div><div class="tiny">'+money(g.saved)+' of '+money(g.target)+'</div></div><div class="amt tnum" style="color:'+g.color+'">'+Math.round(pct*100)+'%</div></div>'+

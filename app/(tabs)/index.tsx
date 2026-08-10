@@ -201,18 +201,25 @@ export default function HomeScreen() {
         </Card>
       )}
 
-      {/* Upcoming recurring */}
-      {upcoming.length > 0 && (
-        <Card style={{ marginBottom: theme.spacing.lg }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs }}>
-            <Text variant="headline">Upcoming</Text>
+      {/* Recurring — always shown so you can add and track recurring here */}
+      <Card style={{ marginBottom: theme.spacing.lg }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs }}>
+          <Text variant="headline">Recurring</Text>
+          {recurring.length > 0 && (
             <Pressable onPress={() => router.push('/recurring')} hitSlop={8}>
               <Text variant="footnote" color="primary">
                 Manage
               </Text>
             </Pressable>
-          </View>
-          {upcoming.map((rule, i) => {
+          )}
+        </View>
+
+        {upcoming.length === 0 ? (
+          <Text variant="footnote" color="textTertiary" style={{ paddingVertical: theme.spacing.xs }}>
+            Rent, subscriptions, salary — add them once and Pennywise posts them automatically.
+          </Text>
+        ) : (
+          upcoming.map((rule, i) => {
             const category = getCategory(rule.categoryId);
             const cadence = rule.frequency === 'weekly' ? 'Weekly' : 'Monthly';
             return (
@@ -251,9 +258,39 @@ export default function HomeScreen() {
                 </Text>
               </Pressable>
             );
-          })}
-        </Card>
-      )}
+          })
+        )}
+
+        {/* Add recurring directly from home */}
+        <Pressable
+          onPress={() => router.push('/recurring-edit')}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.md,
+            paddingTop: theme.spacing.md,
+            marginTop: theme.spacing.xs,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.divider,
+          }}
+        >
+          <View
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 11,
+              backgroundColor: theme.colors.primaryMuted,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="add" size={20} color={theme.colors.primary} />
+          </View>
+          <Text variant="callout" style={{ color: theme.colors.primary, fontWeight: '700' }}>
+            Add recurring
+          </Text>
+        </Pressable>
+      </Card>
 
       {/* Recent transactions */}
       <Card>
